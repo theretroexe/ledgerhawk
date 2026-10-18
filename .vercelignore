@@ -1,0 +1,4 @@
+# Keep the pitch materials and local-only files out of the Vercel upload.
+submission/
+test_app.py
+.env
