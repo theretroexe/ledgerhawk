@@ -36,5 +36,6 @@ Finance, Accounts Payable, Fraud Prevention, Business Automation, Enterprise AI
 
 - Cover image: `cover.png` (1280×720)
 - Slide presentation: `deck.pdf` (9 slides; source `deck.html`)
+- Posters: `poster.pdf` (A3 print, also `poster.png` at 2246×3174) and `poster-social.png` (1080×1350 for social posts); sources `poster.html`, `poster-social.html`
 - Video: record from `demo-script.md`, upload to YouTube, paste the link
 - Extra screenshots if the form allows: `full-orbit-bank.png` (stop on bank details), `full-orbit-json.png` (run record), `full-released.png` (released by a reviewer), `shot-audit.png` (loss prevented), `full-records-gb33.png` (fraudster's IBAN not in the vendor master), `full-orbit-dark.png` (dark theme)
