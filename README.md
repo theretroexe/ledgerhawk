@@ -87,5 +87,11 @@ Then open **Audit analytics**: touchless rate, exposure blocked, hours saved, ex
 - `brand/`: logo mark, small icon (also the favicon) and logo with wordmark
 - `submission/`: pitch deck (`deck.pdf`), cover image, demo script and lablab descriptions
 
+## Security and known limitations
+- **Fail-closed amounts.** A missing, non-numeric, infinite or negative quantity, price or total escalates the invoice instead of passing the tolerance checks.
+- **Duplicate matching ignores formatting.** Invoice numbers and vendor names are compared without case, spaces or punctuation (`AP-5510` matches `ap 5510`).
+- **No authentication in this demo.** Anyone who can reach the server can review invoices and call `POST /api/reset`, and the reviewer name is whatever the form sends. Before real use, put the app behind SSO, take the reviewer from the signed-in user, allow only controllers to release escalated invoices, stop people from approving invoices they submitted, and remove `/api/reset`.
+- **Not yet checked:** near-duplicates under a different invoice number (same vendor, amount and date), and cumulative invoicing against a PO's ordered value.
+
 ## License
 MIT. See `LICENSE`.

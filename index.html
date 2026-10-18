@@ -490,12 +490,13 @@ const CONTROLS = [
   ["Vendor in vendor master", ["unknown_vendor"]], ["Bank details match master", ["bank_change"]],
   ["Not already processed", ["duplicate"]], ["Valid PO for this vendor", ["no_po", "unknown_po", "po_vendor_mismatch"]],
   ["Every item on the PO", ["unordered_item"]], ["Prices within 2% of PO", ["price_variance"]],
-  ["Quantities within PO", ["qty_over"]], ["Total equals the lines", ["total_mismatch"]],
+  ["Quantities within PO", ["qty_over"]], ["Amounts readable and add up", ["total_mismatch", "unreadable_amount"]],
 ];
 const SHORT = {
   duplicate: "Duplicate invoice", bank_change: "Bank details changed", unknown_vendor: "Unknown vendor",
   po_vendor_mismatch: "PO issued to another vendor", no_po: "No purchase order", unknown_po: "PO not found",
   price_variance: "Price above PO", qty_over: "Quantity above PO", unordered_item: "Item not on PO", total_mismatch: "Total doesn't add up",
+  unreadable_amount: "Unreadable amount",
 };
 const STATUS = { approved: "Approved", on_hold: "On hold", escalated: "Stopped", rejected: "Rejected" };
 const TILE = { approved: "Approved", on_hold: "Held", escalated: "Stopped", rejected: "Rejected" };
@@ -822,7 +823,7 @@ function noteText(key, fs, po, master) {
   if (key === "number") return f ? g("⊘", "Already processed", esc(f.message.replace(/^\S+ was already processed on (\S+)/, (_, d) => `On ${day(d)}`))) : g("✓", "Not paid before");
   if (key === "po") return f ? g("⊘", esc(SHORT[f.code]), esc(f.code === "no_po" ? "Route to the requester to raise one." : f.message)) : g("✓", `Open PO, ordered by ${esc(po?.requester || "the requester")}`);
   if (key === "iban") return f ? g("⊘", "Bank details changed", `Vendor master <span class="mono"></span>`) : master ? g("✓", "Matches the vendor master") : "";
-  if (key === "total") return f ? g("Δ", esc(f.message)) : g("✓", "Equals the sum of the lines");
+  if (key === "total") return f ? g(f.severity === "high" ? "⊘" : "Δ", esc(f.message)) : g("✓", "Equals the sum of the lines");
   if (key.startsWith("line-")) {
     if (!po) return "";
     const line = doc.lines[+key.slice(5)];

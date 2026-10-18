@@ -9,6 +9,7 @@ otherwise, so the whole UI works before the workspace and model endpoint are wir
 """
 import asyncio
 import json
+import math
 import os
 import random
 import re
@@ -128,8 +129,9 @@ def sample_pdf(inv):
 # --- Ledger: every processed invoice with its decision and audit trail ---
 # ponytail: in-memory, resets on restart; move to SQLite if the demo needs persistence.
 
-HIGH = {"duplicate", "bank_change", "unknown_vendor", "po_vendor_mismatch"}
+HIGH = {"duplicate", "bank_change", "unknown_vendor", "po_vendor_mismatch", "unreadable_amount"}
 FLAG_TEXT = {
+    "unreadable_amount": "An amount on the invoice could not be read as a valid number",
     "duplicate": "Invoice number already processed for this vendor",
     "bank_change": "Bank details differ from the vendor master",
     "unknown_vendor": "Vendor is not in the vendor master",
@@ -144,7 +146,7 @@ FLAG_TEXT = {
 STATUS = {"approve": "approved", "hold": "on_hold", "escalate": "escalated", "reject": "rejected"}
 # Which invoice field each control checks, so the UI can annotate that exact spot on the document.
 FIELD = {"duplicate": "number", "bank_change": "iban", "unknown_vendor": "vendor", "po_vendor_mismatch": "po",
-         "no_po": "po", "unknown_po": "po", "total_mismatch": "total",
+         "no_po": "po", "unknown_po": "po", "total_mismatch": "total", "unreadable_amount": "total",
          "price_variance": "line", "qty_over": "line", "unordered_item": "line"}
 
 
@@ -229,13 +231,27 @@ async def extract_live(name, data, email):
         return normalize(r.json())
 
 
+def num(v):
+    """A finite number, or None. Unreadable amounts must never compare as 'within tolerance' (NaN fails open)."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if math.isfinite(f) else None
+
+
 def normalize(raw):
     # ponytail: assumes the extractor schema in the README; adjust keys once a real response is seen.
-    lines = [{"desc": str(l.get("description", "")), "qty": float(l.get("quantity", 0)),
-              "price": float(l.get("unit_price", 0))} for l in raw.get("lines", [])]
+    lines = [{"desc": str(l.get("description", "")), "qty": num(l.get("quantity")),
+              "price": num(l.get("unit_price"))} for l in raw.get("lines", [])]
     return {"vendor": raw.get("vendor", ""), "number": raw.get("invoice_number", ""), "date": raw.get("invoice_date", ""),
             "po": raw.get("po_number") or "", "iban": (raw.get("iban") or "").replace(" ", ""),
-            "total": float(raw.get("total") or sum(l["qty"] * l["price"] for l in lines)), "lines": lines}
+            "total": num(raw.get("total")), "lines": lines}
+
+
+def doc_key(s):
+    """Invoice numbers and vendor names compared without case, spaces or punctuation: 'AP-5510' == 'ap 5510'."""
+    return re.sub(r"[^A-Z0-9]", "", str(s or "").upper())
 
 
 async def extract_sim(name, data, email):
@@ -251,19 +267,30 @@ async def extract_sim(name, data, email):
     po = fields.get("PO Number", "-")
     return {"vendor": fields.get("Vendor", ""), "number": fields.get("Invoice No", name.rsplit(".", 1)[0]),
             "date": fields.get("Invoice Date", ""), "po": "" if po == "-" else po, "iban": fields.get("IBAN", ""),
-            "total": float(fields.get("Total") or 0), "lines": lines}
+            "total": num(fields.get("Total")), "lines": lines}
 
 
 # --- Step 2: deterministic audit rules (the auditable part; the model explains and decides) ---
 
 def run_checks(inv):
-    flags, total = [], inv["total"]
+    flags = []
+    # Fail closed: a missing, non-numeric, infinite or negative amount escalates the invoice instead of passing.
+    bad = [i for i, l in enumerate(inv["lines"]) if l["qty"] is None or l["price"] is None or l["qty"] <= 0 or l["price"] < 0]
+    if bad or inv["total"] is None or inv["total"] <= 0:
+        where = f"line {bad[0] + 1}" if bad else "the total"
+        flags.append(flag("unreadable_amount", 0, f"Could not read a valid amount on {where}; check the PDF by hand", amount=0))
+        for l in inv["lines"]:  # recorded as 0 so the ledger stays valid JSON; the flag above already stops payment
+            l["qty"], l["price"] = l["qty"] or 0, l["price"] or 0
+        inv["total"] = inv["total"] if inv["total"] and inv["total"] > 0 else 0
+    total = inv["total"]
     vendor = VENDORS.get(inv["vendor"])
     if not vendor:
         flags.append(flag("unknown_vendor", total, f"'{inv['vendor'] or 'unreadable'}' is not in the vendor master"))
     elif inv["iban"] and inv["iban"] != vendor["iban"]:
         flags.append(flag("bank_change", total, f"IBAN {inv['iban']} differs from master {vendor['iban']}"))
-    prior = next((e for e in LEDGER if e["vendor"] == inv["vendor"] and e["number"] == inv["number"]), None)
+    key = doc_key(inv["number"])
+    prior = key and next((e for e in LEDGER if doc_key(e["vendor"]) == doc_key(inv["vendor"])
+                          and doc_key(e["number"]) == key), None)
     if prior:
         flags.append(flag("duplicate", total, f"{inv['number']} was already processed on {prior['processed_at'][:10]} "
                                               f"({prior['status'].replace('_', ' ')})"))

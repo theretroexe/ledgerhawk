@@ -35,6 +35,23 @@ for body in ({"action": "approve", "reviewer": "x"}, {"action": "approve", "reas
         assert err.status_code == 400
 out = asyncio.run(app.review(esc["id"], {"action": "approve", "reviewer": "x", "reason": "called", "verified": True}))
 assert out["status"] == "approved" and out["agent_status"] == "escalated" and out["reviewed_by"] == "x"
+# Unreadable or non-finite amounts fail closed (NaN would otherwise pass every tolerance check).
+for raw_total, raw_qty in (("nan", 40), ("1000", "inf"), (None, 40), ("abc", 40), ("3400", -5)):
+    inv = app.normalize({"vendor": "Northwind Components", "invoice_number": f"NW-T{raw_total}{raw_qty}", "po_number": "PO-1042",
+                         "iban": "IT60X0542811101000000123456", "total": raw_total,
+                         "lines": [{"description": "Servo motor SM-200", "quantity": raw_qty, "unit_price": 85}]})
+    fl = app.run_checks(inv)
+    assert "unreadable_amount" in {f["code"] for f in fl} and app.rule_decision(fl) == "escalate", (raw_total, raw_qty, fl)
+    assert all(app.math.isfinite(x) for x in (inv["total"], inv["lines"][0]["qty"], inv["lines"][0]["price"]))
+
+# Duplicates are caught whatever the formatting: AP-5510 == "ap 5510" == "AP_5510".
+for variant in ("ap 5510", "AP_5510", " Ap-5510 "):
+    inv = asyncio.run(app.extract_sim("x.pdf", app.sample_pdf(app.SAMPLES["apex-duplicate"]["invoice"]), ""))
+    inv["number"] = variant
+    assert "duplicate" in {f["code"] for f in app.run_checks(inv)}, variant
+# ...but an unreadable (empty) number never matches another empty one.
+assert not app.doc_key("") and not any(f["code"] == "duplicate" for f in app.run_checks(dict(inv, number="")))
+
 rec = app.records()
 assert len(rec["vendors"]) == len(app.VENDORS) and rec["purchase_orders"][0]["ordered"] == 3900.0
 print("ok")
