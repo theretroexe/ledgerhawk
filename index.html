@@ -359,7 +359,7 @@ tr.why p { margin: 0 0 6px; }
 <header class="bar">
   <div class="brand">
     <svg width="34" height="34" viewBox="0 0 64 64" aria-hidden="true"><path fill="currentColor" d="M37.41 31.34 L45.23 25.88 L52.62 28.21 L51.31 32.95 L51.49 33.05 L55.78 26.99 L44.77 22.52 L35.79 29.06ZM49.32 31.41 L41.47 31.86 L36.66 36.39 L38.14 38.01 L42.53 34.14 L49.48 32.59ZM34.35 24.93 L2.05 8.11 L1.95 8.29 L32.65 27.87ZM26.85 25.97 L3.65 14.01 L3.55 14.19 L25.55 28.23ZM22.10 28.16 L4.15 19.11 L4.05 19.29 L20.90 30.24ZM17.35 30.45 L4.65 24.31 L4.55 24.49 L16.25 32.35ZM30.78 20.86 L21.49 3.56 L21.31 3.64 L28.42 21.94ZM26.59 18.78 L15.88 6.54 L15.72 6.66 L25.01 20.02ZM35.86 38.82 L28.30 42.53 L19.51 43.80 L19.69 45.40 L28.90 44.67 L36.94 41.18ZM19.22 43.81 L4.59 47.10 L4.61 47.30 L19.58 46.19ZM20.32 46.81 L7.96 53.91 L8.04 54.09 L21.28 48.79Z"/><circle cx="46.4" cy="27.5" r="1.1" fill="var(--red)"/></svg>
-    <span>LedgerHawk</span><small class="pitch">Stops duplicate and fraudulent invoices before payment</small>
+    <span>LedgerHawk</span><small class="pitch">Flags duplicate and risky invoices before payment</small>
   </div>
   <nav class="tabs" role="tablist" aria-label="Views">
     <button class="tab" role="tab" aria-selected="true" aria-controls="intake" data-view="intake">Intake</button>
@@ -415,9 +415,9 @@ tr.why p { margin: 0 0 6px; }
   <section id="audit" role="tabpanel" hidden>
     <div class="hero">
       <div>
-        <p class="h-label">Loss prevented in the last 30 days</p>
+        <p class="h-label">Potential exposure flagged in the last 30 days</p>
         <p class="big" id="big">€0</p>
-        <p class="h-sub">Duplicate payments and suspected bank-detail fraud, stopped before any money left the account.</p>
+        <p class="h-sub">Demo decisions flag duplicate invoices and suspected bank-detail fraud before payment.</p>
         <p class="delta" id="delta" hidden></p>
       </div>
       <figure class="chart" id="chart" style="margin:0">
@@ -429,7 +429,7 @@ tr.why p { margin: 0 0 6px; }
 
     <div class="block">
       <h2>Waiting for a person</h2>
-      <p class="lede">Invoices the agent would not release on its own. Payment terms keep running while they wait.</p>
+      <p class="lede">Invoices requiring a person's review in this demo. Payment terms keep running while they wait.</p>
       <div class="scroll" id="queue"></div>
     </div>
 
@@ -465,7 +465,7 @@ tr.why p { margin: 0 0 6px; }
   <section id="records" role="tabpanel" hidden>
     <div class="rec-head">
       <div><h1 class="page-title">Records</h1>
-        <p class="lede">The master data every control checks against. The agent only pays vendors, bank accounts and orders listed here.</p></div>
+        <p class="lede">The master data every control checks against before recording a demo decision.</p></div>
       <input type="search" id="rq" placeholder="Search vendor, IBAN, PO or item" aria-label="Search records">
     </div>
     <div class="block"><h2>Vendor master</h2><p class="lede" id="vendors-n"></p><div class="scroll" id="vendors-t"></div></div>
@@ -509,8 +509,8 @@ const paper = $("#paper");
 // ---------- stamp wording follows real AP practice ----------
 function stampFor(e) {
   const codes = new Set(e.flags.map(f => f.code));
-  if (e.reviewed_by) return e.status === "approved" ? { cls: "s-approve", head: "Released for payment" } : { cls: "s-stop", head: "Rejected by reviewer" };
-  if (e.status === "approved") return { cls: "s-approve", head: "Approved for payment" };
+  if (e.reviewed_by) return e.status === "approved" ? { cls: "s-approve", head: "Approved by reviewer" } : { cls: "s-stop", head: "Rejected by reviewer" };
+  if (e.status === "approved") return { cls: "s-approve", head: "Approved in demo" };
   if (e.status === "on_hold") return { cls: "s-hold", head: codes.has("no_po") || codes.has("unknown_po") ? "Hold: PO required" : "Hold: query vendor" };
   if (e.status === "escalated") return { cls: "s-stop", head: codes.has("bank_change") ? "Stop: verify bank details" : "Stop: controller review" };
   return codes.has("duplicate") ? { cls: "s-dup", head: "Duplicate: do not pay" } : { cls: "s-stop", head: "Rejected" };
@@ -554,13 +554,12 @@ async function init() {
   const st = await (await fetch("/api/status")).json();
   S.live = st.live;
   S.model = st.model.split("·")[0].trim();
-  S.hardware = (st.model.split("·")[1] || "AMD Instinct MI300X").trim();
-  $("#model").textContent = `${S.model} on ${S.hardware.replace(/^vLLM on /, "")}`;
-  const allLive = Object.values(st.live).every(Boolean);
+  S.hardware = (st.model.split("·")[1] || "AMD TokenFactory").trim();
+  $("#model").textContent = `${S.model} via ${S.hardware}`;
   const m = $("#mode");
-  m.dataset.live = allLive;
-  m.querySelector("span").textContent = allLive ? "Live" : "Simulation";
-  m.title = Object.entries(st.live).map(([k, v]) => `${k.replace("_", " ")}: ${v ? "live" : "simulated"}`).join("\n");
+  m.dataset.live = st.mode === "live" && st.configured;
+  m.querySelector("span").textContent = st.mode === "live" ? (st.configured ? "Live" : "Live setup incomplete") : "Demo";
+  m.title = st.mode === "live" ? (st.configured ? "Evolus workflows are enabled" : "Check LedgerHawk environment settings") : "Local simulation; no Evolus calls";
   S.samples = await (await fetch("/api/samples")).json();
   buildInbox();
   paperEmpty();
@@ -673,6 +672,7 @@ async function run(file, email, tile, href) {
 
 let doc = {};
 async function handle(ev) {
+  if (ev.status === "error") throw new Error(ev.message || "Invoice processing failed");
   if (ev.step === "result") S.run.entry = ev.entry;
   else if (ev.status === "done") S.run.steps[ev.step] = { mode: ev.mode, ms: ev.ms, data: ev.data };
   if (!$("#json").hidden) renderJSON();
@@ -694,10 +694,10 @@ function runRecord() {
   const s = S.run.steps, ctl = s.match?.data;
   return {
     source: S.run.source,
-    extracted: s.extract ? { by: "Evolus document extractor", mode: s.extract.mode, ms: s.extract.ms, ...s.extract.data } : null,
+    extracted: s.extract ? { by: "Evolus extraction workflow", mode: s.extract.mode, ms: s.extract.ms, ...s.extract.data } : null,
     controls: ctl ? { passed: 8 - failedControls(ctl.flags), of: 8, failed: ctl.flags, purchase_order: ctl.po, vendor_master: ctl.master } : null,
-    decision: s.reason ? { by: `${S.model} on ${S.hardware}, via an Evolus agent`, mode: s.reason.mode, ms: s.reason.ms, ...s.reason.data } : null,
-    vendor_email: s.draft?.data.email ?? null,
+    decision: s.reason ? { by: `Evolus AP assessment workflow via ${S.hardware}`, mode: s.reason.mode, ms: s.reason.ms, ...s.reason.data } : null,
+    vendor_message_draft: s.draft?.data.email ?? null,
     workflow: s.act ? { mode: s.act.mode, ...s.act.data } : null,
     ledger_entry: S.run.entry || null,
   };
@@ -747,7 +747,7 @@ function paperEmpty() {
 function paperReading(name, href) {
   paper.dataset.state = "reading";
   delete paper.dataset.read; delete paper.dataset.checked;
-  $("#caption").innerHTML = `Reading <a href="${esc(href)}" target="_blank" rel="noopener">${esc(name)}</a> with the Evolus document extractor`;
+  $("#caption").innerHTML = `Reading <a href="${esc(href)}" target="_blank" rel="noopener">${esc(name)}</a> with the invoice extraction workflow`;
   paper.innerHTML = `<div class="band" aria-hidden="true"></div><div class="ghost" aria-label="Reading the invoice">
     ${[46, 30, 62, 54, 58, 0, 92, 88, 70].map(w => w ? `<i style="width:${w}%"></i>` : "<br>").join("")}</div>`;
 }
@@ -820,7 +820,7 @@ function noteText(key, fs, po, master) {
   const f = fs[0];
   const g = (sym, body, sub = "") => `<span class="g">${sym}</span>${body}${sub ? `<span class="sub">${sub}</span>` : ""}`;
   if (key === "vendor") return f ? g("⊘", "Not in the vendor master") : g("✓", "Approved vendor");
-  if (key === "number") return f ? g("⊘", "Already processed", esc(f.message.replace(/^\S+ was already processed on (\S+)/, (_, d) => `On ${day(d)}`))) : g("✓", "Not paid before");
+  if (key === "number") return f ? g("⊘", "Already processed", esc(f.message.replace(/^\S+ was already processed on (\S+)/, (_, d) => `On ${day(d)}`))) : g("✓", "No duplicate found");
   if (key === "po") return f ? g("⊘", esc(SHORT[f.code]), esc(f.code === "no_po" ? "Route to the requester to raise one." : f.message)) : g("✓", `Open PO, ordered by ${esc(po?.requester || "the requester")}`);
   if (key === "iban") return f ? g("⊘", "Bank details changed", `Vendor master <span class="mono"></span>`) : master ? g("✓", "Matches the vendor master") : "";
   if (key === "total") return f ? g(f.severity === "high" ? "⊘" : "Δ", esc(f.message)) : g("✓", "Equals the sum of the lines");
@@ -868,11 +868,11 @@ function stamp(e) {
 // ---------- the rail ----------
 function railReset() {
   const steps = [
-    ["extract", "Read the invoice", "Evolus document extractor"],
+    ["extract", "Read the invoice", "Evolus extraction workflow"],
     ["match", "Check against PO and vendor master", "Deterministic controls, every invoice"],
-    ["reason", "Decide", `${S.model} on ${S.hardware}, via an Evolus agent`],
-    ["draft", "Write to the vendor", "Evolus AI Tool (email)"],
-    ["act", "Hand off", "Evolus workflow"],
+    ["reason", "Assess and validate", `${S.model} via ${S.hardware}; local rules decide`],
+    ["draft", "Prepare a draft", "Display only; never sent"],
+    ["act", "Record demo route", "Evolus routing workflow"],
   ];
   $("#steps").innerHTML = steps.map(([id, title, eng]) => `
     <li class="step" data-step="${id}" data-state="idle">
@@ -894,8 +894,8 @@ function railStep(ev) {
     $(".node", li).textContent = "✓";
     $(".t", li).textContent = `${(ev.ms / 1000).toFixed(1)} s`;
     const m = $(".m", li), mode = ev.mode || "";
-    m.className = `m ${mode === "live" ? "m-live" : mode.startsWith("fallback") ? "m-fallback" : ""}`;
-    m.textContent = mode === "local" ? "" : mode.startsWith("fallback") ? "fell back to simulation" : mode;
+    m.className = `m ${mode === "live" ? "m-live" : ""}`;
+    m.textContent = mode === "local" ? "" : mode;
     m.title = mode;
     $(".s-out", li).innerHTML = OUT[ev.step](ev.data);
   }
@@ -904,25 +904,25 @@ function railStep(ev) {
 }
 
 const OUT = {
-  extract: d => `${d.lines.length} line${d.lines.length === 1 ? "" : "s"} and 6 header fields read`,
+  extract: d => `${d.lines.length} line${d.lines.length === 1 ? "" : "s"}; invoice fields parsed`,
   match: d => {
     const failed = CONTROLS.filter(([, codes]) => d.flags.some(f => codes.includes(f.code)));
     return `${8 - failed.length} of 8 controls passed${failed.length ? `<ul>${failed.map(([label]) => `<li>${label}: failed</li>`).join("")}</ul>` : ""}`;
   },
   reason: d => `<blockquote>${esc(d.rationale)}</blockquote>${d.guard ? `<div class="guard">${esc(d.guard)}</div>` : ""}`,
   draft: d => `<pre>${esc(d.email)}</pre>`,
-  act: d => `Started the ${d.workflow === "post-to-erp" ? "post to ERP" : "human review"} workflow <span class="mono muted">${esc(String(d.executionId || "").slice(0, 8))}</span>`,
+  act: d => `Recorded in ${esc(d.route || "the demo queue")} <span class="mono muted">${esc(String(d.executionId || "").slice(0, 8))}</span>`,
 };
 
 function verdictCopy(e) {
   const codes = new Set(e.flags.map(f => f.code));
   if (e.reviewed_by) return e.status === "approved"
-    ? [`Released for payment by ${e.reviewed_by}`, e.review_reason ? `Reason: ${e.review_reason}` : "No reason recorded."]
+    ? [`Approved in demo by ${e.reviewed_by}`, e.review_reason ? `Reason: ${e.review_reason}` : "No reason recorded."]
     : [`Rejected by ${e.reviewed_by}`, e.review_reason ? `Reason: ${e.review_reason}` : "No reason recorded."];
   return {
-    approved: ["Posted to the ERP for payment", `Due ${day(e.due) || "on terms"}. No person needed to touch it.`],
-    on_hold: [codes.has("no_po") ? "Held until a PO is raised" : "Held until the vendor corrects it", "The agent drafted the request. Release it yourself if you have checked it."],
-    escalated: ["Payment stopped", "Call the vendor on the number in the vendor master before releasing it. Never use a number from the email."],
+    approved: ["Recorded in the demo approval queue", `Due ${day(e.due) || "on terms"}. No payment or ERP posting was made.`],
+    on_hold: [codes.has("no_po") ? "Held until a PO is raised" : "Held until the vendor corrects it", "Review the draft and checks before approving this demo invoice."],
+    escalated: ["Escalated for controller review", "Call the vendor on the number in the vendor master before approving. Never use a number from the email."],
     rejected: ["Rejected as a duplicate", "This invoice was already processed. Paying it again would double-pay the vendor."],
   }[e.status];
 }
@@ -954,7 +954,7 @@ function reviewForm(e, onDone) {
     <label class="fld"><span>${stopped ? "Reason" : "Reason, optional"}</span>
       <textarea name="why" rows="2" placeholder="${stopped ? "Who did you call, and what did they confirm?" : "What did you check?"}"></textarea></label>
     ${stopped ? `<label class="chk"><input type="checkbox" name="verified"><span>I called ${esc(e.vendor)} on the number in the vendor master and they confirmed the new bank details.</span></label>` : ""}
-    <div class="r-actions"><button class="btn primary" value="approve">Release for payment</button><button class="btn" value="reject">Reject invoice</button></div>
+    <div class="r-actions"><button class="btn primary" value="approve">Approve in demo</button><button class="btn" value="reject">Reject invoice</button></div>
     <p class="r-err" role="alert"></p>`;
   const [rel, rej] = $$("button", f), err = $(".r-err", f);
   const name = () => f.elements.reviewer.value.trim(), why = () => f.elements.why.value.trim();

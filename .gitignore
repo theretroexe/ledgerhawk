@@ -1,3 +1,7 @@
 .env
+.env.*
+!.env.example
+.venv/
+.ledgervenv/
 __pycache__/
 submission/old/

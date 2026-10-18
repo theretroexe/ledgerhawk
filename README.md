@@ -1,97 +1,47 @@
-<img src="brand/ledgerhawk-mark.svg" width="72" alt="LedgerHawk logo: a hawk in flight drawn in broken pen strokes">
+# LedgerHawk
 
-# LedgerHawk: accounts-payable control agent on Evolus × AMD
+LedgerHawk is an accounts payable invoice audit **demo**. Its existing FastAPI dashboard accepts PDF invoices, compares them with local purchase orders and vendor records, records decisions, and offers a human review queue and audit analytics. It does not make payments, post to an ERP, or send messages.
 
-An AI agent that runs supplier-invoice intake end to end: it reads the invoice that arrives by email, matches it against the purchase order and vendor master, decides whether to pay, hold, escalate or reject it, drafts the query to the vendor, and fires the Evolus workflow that posts it to the ERP or routes it to a person. Every decision lands in an audit log with the agent's reasoning, and the analytics view shows the money it stopped.
+## How an invoice is processed
 
-**Track:** Evolus Business Agents on AMD · AMD Developer Hackathon ACT III
+1. In **live** mode, an Evolus invoice extraction workflow receives the PDF in multipart field `file`. The app polls its execution and parses `vendor`, `invoice_number`, `invoice_date`, `po_number`, `iban`, `currency`, `total`, and `lines` (including JSON-encoded line arrays). In **demo** mode, the bundled sample PDFs use the local extractor simulation.
+2. The backend performs deterministic duplicate, bank-account, vendor, PO, line-item, amount, and total checks. Its decision priority is **duplicate → reject; other high-risk flag → escalate; other failed check → hold; no failed checks → approve**.
+3. In live mode, an Evolus AP assessment workflow receives the invoice, matched PO, vendor master entry, flags, and `ap_policy.md` through multipart text field `input`. It returns a decision, rationale, and optional vendor-message **draft for display only**. The backend validates this response and overrides any decision that disagrees with its local rules. Demo mode uses local assessment and draft simulations.
+4. The final decision and invoice summary go to a **demo-only Evolus routing workflow** in live mode, also through `input`. The app polls for a completed acknowledgement and checks the invoice number, decision, route, and `recorded` status before adding an audit entry. Demo mode simulates the acknowledgement. Review actions also use the demo route.
 
-## The problem
-AP teams key invoices by hand, about 10–15 minutes each, and still pay duplicates, overcharges and fraudulent bank-detail changes. Business email compromise ("our IBAN has changed") is one of the costliest frauds companies face.
+Both modes preserve the existing dashboard, review queue, sample invoice generator, and in-memory audit log. A live failure is shown as an error and does **not** silently switch to simulation.
 
-## How it works
+## Run locally
 
-```mermaid
-flowchart LR
-  A[Email + PDF invoice] --> B[Evolus document extractor]
-  B --> C[PO match + audit rules]
-  C --> D[Evolus AP agent<br/>open model on AMD MI300X via vLLM<br/>+ AP policy knowledge library]
-  D -->|approve| E[Evolus workflow: post to ERP]
-  D -->|hold| F[Evolus AI Tool: draft vendor email]
-  F --> G[Evolus workflow: human review]
-  D -->|escalate / reject| G
-  E & G --> H[Audit log + analytics]
-```
-
-| Step | Built on |
-|---|---|
-| Read the PDF into JSON | Evolus **document extractor** (REST `ask-file`) |
-| PO match (two-way: invoice vs PO), duplicate and bank-detail checks | Deterministic rules in `app.py`, so the result is auditable |
-| Decide and explain | Evolus **agent** (OpenAI-compatible endpoint) on an **open model served on AMD Developer Cloud with vLLM**, grounded in a **knowledge library** holding `ap_policy.md` |
-| Draft the vendor query | Evolus **AI Tool** `email` |
-| Act | Evolus **workflows**: `post-to-erp` and `human-review` |
-
-**Guardrail:** the model can be stricter than the rules, never looser. If it approves an invoice with failed checks, the policy decision overrides it and the override is logged.
-
-## Run it
-
-Every Evolus step runs live when its env vars are set and is simulated otherwise, so the app works out of the box.
+From the `ledgerhawk/` directory:
 
 ```bash
-pip install -r requirements.txt
-python app.py            # http://localhost:8000
-python test_app.py       # self-check: the 5 demo invoices land on the right decisions
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+cp .env.example .env
+.venv/bin/python app.py
 ```
 
-Docker:
+Open `http://localhost:8000`. `LEDGERHAWK_MODE=demo` works without Evolus credentials. For live mode, set `LEDGERHAWK_MODE=live` and fill `EVOLUS_API_KEY`, `EVOLUS_APPLICATION_ID`, `EVOLUS_WORKFLOW_EXTRACT_ID`, `EVOLUS_WORKFLOW_ASSESS_ID`, and `EVOLUS_WORKFLOW_ROUTE_ID` in the local `.env`; restart the app. `EVOLUS_BASE_URL` defaults to `https://api.evolus.ai`. `AMD_MODEL_NAME` only changes the dashboard label. The app loads its own `.env` without overriding already-set process variables. It never prints the key, document body, or extracted output.
+
+The three workflow IDs must refer to the **LedgerHawk** invoice extraction, AP assessment, and demo routing workflows. The routing workflow must generate an acknowledgement only; verify that it has no email, messaging, ERP, or payment steps. TenderLens workflows are separate and should not be reused here.
+
+## Test
+
+```bash
+.venv/bin/python test_app.py
+.venv/bin/python -m unittest test_workflows.py -v
+```
+
+Both commands use offline data and mocks, even when local `.env` selects live mode. The five sample outcomes are Northwind **approve**, Orbit **escalate**, Apex **reject**, Helix **hold**, and Brightline **hold**. Repeated runs of the same invoice become duplicates until you click **Reset demo data** or call `POST /api/reset`.
+
+Docker uses the same configuration:
 
 ```bash
 docker build -t ledgerhawk .
 docker run -p 8000:8000 --env-file .env ledgerhawk
 ```
 
-## Going live (Evolus + AMD)
+## Security and limits
 
-1. **Model on AMD.** On AMD Developer Cloud, start an MI300X droplet with the vLLM image and serve a tool-calling model:
-   `vllm serve Qwen/Qwen2.5-7B-Instruct --api-key <secret> --enable-auto-tool-choice --tool-call-parser hermes`
-2. **Evolus workspace.** Create it from the event link (`app.evolus.ai/join/AMDACT3`). Under models, add an OpenAI-compatible endpoint: base URL `http://<droplet-ip>:8000/v1`, model `Qwen/Qwen2.5-7B-Instruct`, API key `<secret>`. Test the connection.
-3. **Knowledge library.** Create one and upload `ap_policy.md`.
-4. **AP agent.** Create an agent that uses the AMD model and the library. Put its id in `EVOLUS_AP_AGENT_ID`.
-5. **Document extractor.** Create a JSON extractor with these fields: `vendor`, `invoice_number`, `invoice_date`, `po_number`, `iban`, `currency`, `total`, `lines[] {description, quantity, unit_price}`. Put the owning agent id and the extractor id in `EVOLUS_EXTRACTOR_AGENT_ID` and `EVOLUS_EXTRACTOR_ID`.
-6. **Workflows.** Create `post-to-erp` and `human-review` (for example, send an email or a Teams message). Put their ids in `EVOLUS_WORKFLOW_POST_ID` and `EVOLUS_WORKFLOW_REVIEW_ID`.
-7. Copy `.env.example` to `.env`, fill in the values and restart. The header pills switch from `sim` to `live`. A live call that fails shows a `fallback` chip in the trace with the error.
-
-Never commit `.env`.
-
-## Demo script (2 minutes)
-
-The AP inbox holds five emails, one per scenario:
-
-| Email | What the agent does |
-|---|---|
-| Northwind NW-2291 | Clean match → approved for payment |
-| Orbit OC-3302 "new bank details" | IBAN differs from master → payment stopped as possible fraud; release needs a reason and a call-back |
-| Apex AP-5510 "reminder" | Already paid 17 days ago → rejected as a duplicate |
-| Helix HX-7781 | Price +10% over PO → hold, drafts the vendor email |
-| Brightline BL-0917 | No PO → hold for the requester |
-
-Rehearsing processes the invoices for real, so a second run of the same email is caught as a duplicate. Click **Reset demo data** at the bottom of the Audit view (or `POST /api/reset`) before going on stage.
-
-Then open **Audit analytics**: touchless rate, exposure blocked, hours saved, exceptions by reason, the human review queue and the searchable audit log with CSV export.
-
-## Files
-- `app.py`: API, agent pipeline, Evolus client, simulation
-- `index.html`: the UI, with no build step
-- `ap_policy.md`: policy document for the knowledge library
-- `test_app.py`: self-check
-- `brand/`: logo mark, small icon (also the favicon) and logo with wordmark
-- `submission/`: pitch deck (`deck.pdf`), cover image, demo script and lablab descriptions
-
-## Security and known limitations
-- **Fail-closed amounts.** A missing, non-numeric, infinite or negative quantity, price or total escalates the invoice instead of passing the tolerance checks.
-- **Duplicate matching ignores formatting.** Invoice numbers and vendor names are compared without case, spaces or punctuation (`AP-5510` matches `ap 5510`).
-- **No authentication in this demo.** Anyone who can reach the server can review invoices and call `POST /api/reset`, and the reviewer name is whatever the form sends. Before real use, put the app behind SSO, take the reviewer from the signed-in user, allow only controllers to release escalated invoices, stop people from approving invoices they submitted, and remove `/api/reset`.
-- **Not yet checked:** near-duplicates under a different invoice number (same vendor, amount and date), and cumulative invoicing against a PO's ordered value.
-
-## License
-MIT. See `LICENSE`.
+Keep `.env` out of Git and never paste credentials into issues or chat. The dashboard has no login, and its ledger lives in memory; use it as a demo, not a production payment system. The app accepts PDFs up to 20 MB. Live workflow requests time out, failed execution statuses surface to the user, and no audit entry is added for a failed pipeline. The local reviewer identity is self-reported; production use would require authentication and persistent records.

@@ -1,6 +1,6 @@
 # Accounts Payable Control Policy
 
-Upload this file to the Evolus knowledge library attached to the AP control agent.
+The app sends these rules to the Evolus AP assessment workflow. Local deterministic checks remain authoritative.
 
 ## 1. Approval
 An invoice may be approved for payment only when all of these hold:

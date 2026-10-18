@@ -1,12 +1,4 @@
-"""LedgerHawk: accounts-payable invoice intake + audit agent.
-
-Pipeline per invoice: Evolus document extractor -> deterministic PO match (two-way) / audit rules
--> Evolus agent reasoning on an open model served on AMD (vLLM) -> Evolus AI Tool drafts the
-vendor query -> Evolus workflow posts to ERP or routes to a human.
-
-Every Evolus call runs live when its env vars are set and falls back to a local simulation
-otherwise, so the whole UI works before the workspace and model endpoint are wired in.
-"""
+"""LedgerHawk: AP invoice audit demo with deterministic controls and Evolus workflows."""
 import asyncio
 import json
 import math
@@ -17,37 +9,64 @@ import time
 import unicodedata
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
-import httpx
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
 
-API = "https://api.evolus.ai"
+from evolus_workflows import (WorkflowError, assessment_output, execute_workflow,
+                              extraction_output, route_output, ROUTES)
+
+
+ROOT = Path(__file__).resolve().parent
+
+
+def load_local_env():
+    """Load simple KEY=value entries from this project's .env without overriding process env."""
+    path = ROOT / ".env"
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        key, separator, value = line.partition("=")
+        key, value = key.strip(), value.strip()
+        if separator and re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", key):
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+                value = value[1:-1]
+            os.environ.setdefault(key, value)
+
+
+load_local_env()
+
+API = os.getenv("EVOLUS_BASE_URL", "https://api.evolus.ai").rstrip("/")
 KEY = os.getenv("EVOLUS_API_KEY")
-APP_ID = os.getenv("EVOLUS_APP_ID")
-EXTRACTOR_AGENT = os.getenv("EVOLUS_EXTRACTOR_AGENT_ID")
-EXTRACTOR_ID = os.getenv("EVOLUS_EXTRACTOR_ID")
-AP_AGENT = os.getenv("EVOLUS_AP_AGENT_ID")  # Evolus agent whose model is the AMD vLLM endpoint
-WF_POST = os.getenv("EVOLUS_WORKFLOW_POST_ID")  # approved -> post to ERP
-WF_REVIEW = os.getenv("EVOLUS_WORKFLOW_REVIEW_ID")  # anything else -> human review
-MODEL_NAME = os.getenv("AMD_MODEL_NAME", "Qwen2.5-7B-Instruct · vLLM on AMD Instinct MI300X")
+APP_ID = os.getenv("EVOLUS_APPLICATION_ID")
+WORKFLOWS = {
+    "Extraction": os.getenv("EVOLUS_WORKFLOW_EXTRACT_ID"),
+    "Assessment": os.getenv("EVOLUS_WORKFLOW_ASSESS_ID"),
+    "Routing": os.getenv("EVOLUS_WORKFLOW_ROUTE_ID"),
+}
+MODE = os.getenv("LEDGERHAWK_MODE", "demo").strip().lower()
+if MODE not in ("demo", "live"):
+    raise ValueError("LEDGERHAWK_MODE must be demo or live")
+MODEL_NAME = os.getenv("AMD_MODEL_NAME", "AMD TokenFactory")
+POLICY_TEXT = (ROOT / "ap_policy.md").read_text(encoding="utf-8")
 PRICE_TOLERANCE = 0.02  # 2% unit-price variance allowed before a hold
 MAX_UNIT, MAX_TOTAL = 1e9, 1e12  # any quantity, unit price or total beyond these is treated as unreadable
 MANUAL_MINUTES = 12  # assumed manual handling time per invoice, used for "hours saved"
 
 
-def live(*ids):
-    return bool(KEY and APP_ID and all(ids))
+def require_live_config():
+    configured = {"EVOLUS_API_KEY": KEY, "EVOLUS_APPLICATION_ID": APP_ID,
+                  "EVOLUS_WORKFLOW_EXTRACT_ID": WORKFLOWS["Extraction"],
+                  "EVOLUS_WORKFLOW_ASSESS_ID": WORKFLOWS["Assessment"],
+                  "EVOLUS_WORKFLOW_ROUTE_ID": WORKFLOWS["Routing"]}
+    missing = [key for key, value in configured.items() if not value]
+    if missing:
+        raise WorkflowError("Live mode is missing configuration: " + ", ".join(missing))
 
-
-LIVE = {
-    "extractor": live(EXTRACTOR_AGENT, EXTRACTOR_ID),
-    "agent": live(AP_AGENT),
-    "ai_tool": live(),
-    "workflow": live(WF_POST, WF_REVIEW),
-}
-
-# --- Company master data (would live in the ERP; Evolus reaches it through a workflow/MCP) ---
+# --- Demo-only in-memory vendor and PO records; there is no ERP connection. ---
 
 VENDORS = {
     "Northwind Components": {"iban": "IT60X0542811101000000123456", "terms_days": 30},
@@ -106,8 +125,10 @@ SAMPLES = {
 def sample_pdf(inv):
     """Minimal one-page text PDF (no deps). Text stays uncompressed so the simulator can read it back."""
     total = sum(q * p for _, q, p in inv["lines"])
+    grouped_iban = " ".join(inv["iban"][i:i + 4] for i in range(0, len(inv["iban"]), 4))
     rows = ["INVOICE", "", f"Vendor: {inv['vendor']}", f"Invoice No: {inv['number']}",
-            f"Invoice Date: {inv['date']}", f"PO Number: {inv['po'] or '-'}", f"IBAN: {inv['iban']}",
+            f"Invoice Number: {inv['number']}", f"Invoice Date: {inv['date']}",
+            f"PO Number: {inv['po'] or 'NONE'}", f"IBAN: {grouped_iban}",
             "Currency: EUR", "", "Item | Qty | Unit Price | Amount"]
     rows += [f"{d} | {q} | {p:.2f} | {q * p:.2f}" for d, q, p in inv["lines"]]
     rows += ["", f"Total: {total:.2f}"]
@@ -195,8 +216,8 @@ def seed_ledger():
         total = round(rng.uniform(180, 9800), 2)
         at = now() - timedelta(days=rng.uniform(0.3, 30), hours=rng.uniform(0, 8))
         why = {"approved": "Matched the PO on items, quantities and prices; bank details verified against the vendor "
-                           "master. Posted for payment.",
-               "rejected": "Invoice number already paid for this vendor; rejected to prevent a double payment.",
+                           "master. Recorded in the demo approval queue.",
+               "rejected": "Invoice number already processed for this vendor; rejected to prevent a duplicate.",
                "escalated": "Bank details differ from the vendor master; escalated to the controller for "
                             "call-back verification.",
                "on_hold": f"{FLAG_TEXT[codes[0]] if codes else ''}; held until the vendor or requester resolves it."}
@@ -209,33 +230,29 @@ def seed_ledger():
                      review_reason="Vendor sent a corrected invoice." if status == "on_hold"
                      else "Call-back to the number on file: vendor never changed its bank details.")
         ledger.append(e)
-    # The real AP-5510, already paid, so the reminder in the inbox is caught as a duplicate.
+    # A prior AP-5510 record makes the reminder in the demo inbox a duplicate.
     paid = now() - timedelta(days=17)
     ledger.append(entry("AP-5510", "Apex Logistics", "PO-1044", "2026-09-28", 1140.00, "approved", [],
-                        "Matched PO-1044 line by line; posted.", paid, 9100, "seed"))
+                        "Matched PO-1044 line by line; previously recorded in the demo ledger.", paid, 9100, "seed"))
     return sorted(ledger, key=lambda e: e["processed_at"])
 
 
 LEDGER = seed_ledger()
 
 
-def evolus_headers():
-    return {"X-ApiKey": KEY, "X-Application-Id": APP_ID}
-
-
 # --- Step 1: extraction ---
 
 async def extract_live(name, data, email):
-    async with httpx.AsyncClient(timeout=120) as c:
-        r = await c.post(f"{API}/api/v1/agents/{EXTRACTOR_AGENT}/json/{EXTRACTOR_ID}/ask-file",
-                         params={"useWebhook": "false"}, headers=evolus_headers(),
-                         files={"file": (name, data, "application/pdf")}, data={"email": email})
-        r.raise_for_status()
-        return normalize(r.json())
+    result = await execute_workflow("Extraction", WORKFLOWS["Extraction"],
+                                    {"file": (os.path.basename(name), data, "application/pdf")},
+                                    KEY, APP_ID, API)
+    return normalize(extraction_output(result))
 
 
 def num(v):
     """A finite number, or None. Unreadable amounts must never compare as 'within tolerance' (NaN fails open)."""
+    if isinstance(v, bool):
+        return None
     try:
         f = float(v)
     except (TypeError, ValueError):
@@ -244,12 +261,15 @@ def num(v):
 
 
 def normalize(raw):
-    # ponytail: assumes the extractor schema in the README; adjust keys once a real response is seen.
+    po = str(raw.get("po_number") or "").strip()
+    if po.casefold() in {"-", "n/a", "none", "null", "no po", "not provided"}:
+        po = ""
     lines = [{"desc": str(l.get("description", "")), "qty": num(l.get("quantity")),
               "price": num(l.get("unit_price"))} for l in raw.get("lines", [])]
-    return {"vendor": raw.get("vendor", ""), "number": raw.get("invoice_number", ""), "date": raw.get("invoice_date", ""),
-            "po": raw.get("po_number") or "", "iban": (raw.get("iban") or "").replace(" ", ""),
-            "total": num(raw.get("total")), "lines": lines}
+    return {"vendor": raw.get("vendor") or "", "number": raw.get("invoice_number") or "",
+            "date": raw.get("invoice_date") or "", "po": po,
+            "iban": re.sub(r"[\s-]", "", raw.get("iban") or "").upper(),
+            "currency": raw.get("currency") or "EUR", "total": num(raw.get("total")), "lines": lines}
 
 
 def doc_key(s):
@@ -274,13 +294,14 @@ async def extract_sim(name, data, email):
         parts = [p.strip() for p in t.split("|")]
         if len(parts) == 4 and parts[1].replace(".", "").isdigit():
             lines.append({"desc": parts[0], "qty": float(parts[1]), "price": float(parts[2])})
-    po = fields.get("PO Number", "-")
+    po = fields.get("PO Number", "NONE")
     return {"vendor": fields.get("Vendor", ""), "number": fields.get("Invoice No", name.rsplit(".", 1)[0]),
-            "date": fields.get("Invoice Date", ""), "po": "" if po == "-" else po, "iban": fields.get("IBAN", ""),
-            "total": num(fields.get("Total")), "lines": lines}
+            "date": fields.get("Invoice Date", ""), "po": "" if po.upper() in ("-", "NONE") else po,
+            "iban": re.sub(r"[\s-]", "", fields.get("IBAN", "")).upper(),
+            "currency": fields.get("Currency", "EUR"), "total": num(fields.get("Total")), "lines": lines}
 
 
-# --- Step 2: deterministic audit rules (the auditable part; the model explains and decides) ---
+# --- Step 2: deterministic audit rules and authoritative decision ---
 
 def run_checks(inv):
     flags = []
@@ -298,8 +319,10 @@ def run_checks(inv):
     vendor = VENDORS.get(inv["vendor"])
     if not vendor:
         flags.append(flag("unknown_vendor", total, f"'{inv['vendor'] or 'unreadable'}' is not in the vendor master"))
-    elif inv["iban"] and inv["iban"] != vendor["iban"]:
-        flags.append(flag("bank_change", total, f"IBAN {inv['iban']} differs from master {vendor['iban']}"))
+    elif inv["iban"] != vendor["iban"]:
+        message = (f"IBAN {inv['iban']} differs from master {vendor['iban']}" if inv["iban"]
+                   else "Invoice IBAN is missing; check against the vendor master")
+        flags.append(flag("bank_change", total, message))
     key = doc_key(inv["number"])
     prior = None
     if not key:  # without a number the duplicate check can't run, so the invoice can't pass it
@@ -351,25 +374,24 @@ def rule_decision(flags):
     return "hold" if flags else "approve"
 
 
-# --- Step 3: agent reasoning on the AMD-hosted model (through the Evolus agent) ---
+# --- Step 3: Evolus assessment, with a local policy decision ---
 
 async def reason_live(inv, flags, po):
-    prompt = (
-        "You are the accounts-payable control agent. Decide what to do with this supplier invoice, "
-        "following the AP policy in your knowledge library.\n"
-        f"Invoice: {json.dumps(inv)}\nPurchase order: {json.dumps(po)}\n"
-        f"Vendor master: {json.dumps(VENDORS.get(inv['vendor']))}\nFailed audit checks: {json.dumps(flags)}\n"
-        'Reply with JSON only: {"decision": "approve|hold|escalate|reject", '
-        '"rationale": "2-3 sentences for the audit log", "confidence": 0.0-1.0}')
-    async with httpx.AsyncClient(timeout=120) as c:
-        r = await c.post(f"{API}/v1/chat/completions", headers={"Authorization": f"Bearer {KEY}"},
-                         json={"model": f"{APP_ID}:{AP_AGENT}", "messages": [{"role": "user", "content": prompt}]})
-        r.raise_for_status()
-        reply = r.json()["choices"][0]["message"]["content"]
-    match = re.search(r"\{.*\}", reply, re.S)
-    out = json.loads(match.group(0)) if match else {}
-    return {"decision": out.get("decision"), "rationale": str(out.get("rationale", reply))[:600],
-            "confidence": out.get("confidence")}
+    invoice = {
+        "vendor": inv["vendor"], "invoice_number": inv["number"], "invoice_date": inv["date"],
+        "po_number": inv["po"], "iban": inv["iban"], "currency": inv["currency"],
+        "total": inv["total"], "lines": [
+            {"description": line["desc"], "quantity": line["qty"], "unit_price": line["price"]}
+            for line in inv["lines"]
+        ],
+    }
+    context = {"extracted_invoice": invoice, "purchase_order": po,
+               "vendor_master": VENDORS.get(inv["vendor"]), "deterministic_flags": flags,
+               "ap_policy": POLICY_TEXT}
+    result = await execute_workflow("Assessment", WORKFLOWS["Assessment"],
+                                    {"input": (None, json.dumps(context, ensure_ascii=False))},
+                                    KEY, APP_ID, API)
+    return assessment_output(result)
 
 
 async def reason_sim(inv, flags, po):
@@ -379,7 +401,7 @@ async def reason_sim(inv, flags, po):
     terms = VENDORS.get(inv["vendor"], {}).get("terms_days", 30)
     rationale = {
         "approve": f"Invoice {inv['number']} matches {inv['po']} on vendor, items, quantities and prices, and the "
-                   f"bank details match the vendor master. Safe to post for payment in {terms} days.",
+                   f"bank details match the vendor master. Approved in this demo on {terms}-day terms.",
         "reject": f"Rejected as a duplicate: {msgs}. Paying it again would double-pay €{inv['total']:,.2f}.",
         "escalate": f"Escalated to the controller: {msgs}. Bank-detail changes requested by email are a classic "
                     "payment-fraud pattern; confirm with the vendor through a known phone number before paying.",
@@ -389,28 +411,15 @@ async def reason_sim(inv, flags, po):
 
 
 def guard(model_out, flags):
-    """The model may be stricter than the rules, never looser."""
+    """The deterministic rule decision is authoritative for every outcome."""
     rules = rule_decision(flags)
     d = model_out.get("decision")
-    if d not in STATUS:
-        return rules, "model reply unparseable; used policy rules"
-    if d == "approve" and flags:
-        return rules, "guardrail: model approved an invoice with failed checks; overridden"
-    return d, None
+    if d != rules:
+        return rules, f"policy override: assessment said {d}; deterministic checks require {rules}"
+    return rules, None
 
 
-# --- Step 4: AI Tool drafts the vendor query ---
-
-async def draft_live(inv, flags):
-    async with httpx.AsyncClient(timeout=120) as c:
-        r = await c.post(f"{API}/api/v1/ai-tools/email/run", headers=evolus_headers(), json={
-            "text": f"Write a short, polite email to {inv['vendor']} about invoice {inv['number']} "
-                    f"(PO {inv['po'] or 'none'}). Issues: " + "; ".join(f["message"] for f in flags)
-                    + ". Ask for a corrected invoice or written confirmation."})
-        r.raise_for_status()
-        return r.json()["output"]
-
-
+# --- Step 4: optional display-only draft ---
 async def draft_sim(inv, flags):
     await asyncio.sleep(0.8)
     issues = "\n".join(f"  • {f['message']}" for f in flags)
@@ -420,32 +429,24 @@ async def draft_sim(inv, flags):
             "We will process it as soon as we hear back.\n\nKind regards,\nAccounts Payable")
 
 
-# --- Step 5: Evolus workflow acts (post to ERP / human review) ---
+# --- Step 5: side-effect-free demo routing acknowledgement ---
 
 async def act_live(inv, decision, rationale):
-    wf = WF_POST if decision == "approve" else WF_REVIEW
-    params = {"invoice_number": inv["number"], "vendor": inv["vendor"], "po": inv["po"],
-              "total": inv["total"], "decision": decision}
-    async with httpx.AsyncClient(timeout=60) as c:
-        r = await c.post(f"{API}/api/v1/workflows/{wf}/execute", headers=evolus_headers(),
-                         files={"input": (None, rationale), "parameters": (None, json.dumps(params))})
-        r.raise_for_status()
-        return {"workflow": "post-to-erp" if decision == "approve" else "human-review", **r.json()}
+    payload = {"invoice": {"invoice_number": inv["number"], "vendor": inv["vendor"],
+                           "po_number": inv["po"], "currency": inv.get("currency", "EUR"),
+                           "total": inv["total"]},
+               "final_decision": decision, "reason": rationale}
+    result = await execute_workflow("Routing", WORKFLOWS["Routing"],
+                                    {"input": (None, json.dumps(payload, ensure_ascii=False))},
+                                    KEY, APP_ID, API)
+    return route_output(result, inv["number"], decision)
 
 
 async def act_sim(inv, decision, rationale):
     await asyncio.sleep(0.6)
-    return {"workflow": "post-to-erp" if decision == "approve" else "human-review",
-            "executionId": uuid.uuid4().hex[:12], "status": "Pending"}
-
-
-async def attempt(is_live, live_fn, sim_fn, *args):
-    if is_live:
-        try:
-            return await live_fn(*args), "live"
-        except Exception as e:  # keep the demo running, but say so in the trace
-            return await sim_fn(*args), f"fallback: {type(e).__name__}: {e}"[:180]
-    return await sim_fn(*args), "simulated"
+    return {"workflow": "demo-routing", "executionId": uuid.uuid4().hex[:12],
+            "status": "recorded", "route": ROUTES[decision],
+            "message": "Invoice recorded in the demo queue."}
 
 
 VENDOR_FIXABLE = {"price_variance", "qty_over", "unordered_item", "total_mismatch"}
@@ -473,7 +474,9 @@ def favicon():
 
 @app.get("/api/status")
 def status():
-    return {"live": LIVE, "model": MODEL_NAME}
+    configured = bool(KEY and APP_ID and all(WORKFLOWS.values()))
+    return {"mode": MODE, "configured": configured, "model": MODEL_NAME,
+            "live": {"extract": MODE == "live", "assess": MODE == "live", "route": MODE == "live"}}
 
 
 @app.get("/api/samples")
@@ -494,16 +497,32 @@ async def process(file: UploadFile = File(...), email: str = Form("")):
     data = await file.read()
     if len(data) > 20 * 1024 * 1024:
         raise HTTPException(413, "Invoices up to 20 MB")
+    if not data.startswith(b"%PDF-"):
+        raise HTTPException(400, "Upload a PDF invoice")
     return StreamingResponse(run(file.filename or "invoice.pdf", data, email), media_type="application/x-ndjson")
 
 
 async def run(name, data, email):
+    try:
+        async for event in run_pipeline(name, data, email):
+            yield event
+    except WorkflowError as exc:
+        yield json.dumps({"step": "error", "status": "error", "message": str(exc)}) + "\n"
+    except Exception:
+        yield json.dumps({"step": "error", "status": "error",
+                          "message": "Invoice processing failed unexpectedly"}) + "\n"
+
+
+async def run_pipeline(name, data, email):
+    if MODE == "live":
+        require_live_config()
     started = time.perf_counter()
     ev = lambda **k: json.dumps(k) + "\n"
 
     yield ev(step="extract", status="running")
     t = time.perf_counter()
-    inv, mode = await attempt(LIVE["extractor"], extract_live, extract_sim, name, data, email)
+    inv = await (extract_live(name, data, email) if MODE == "live" else extract_sim(name, data, email))
+    mode = MODE
     yield ev(step="extract", status="done", mode=mode, ms=ms(t), data=inv)
 
     yield ev(step="match", status="running")
@@ -514,27 +533,35 @@ async def run(name, data, email):
 
     yield ev(step="reason", status="running")
     t = time.perf_counter()
-    out, mode = await attempt(LIVE["agent"], reason_live, reason_sim, inv, flags, po)
+    out = await (reason_live(inv, flags, po) if MODE == "live" else reason_sim(inv, flags, po))
     decision, note = guard(out, flags)
+    if note:
+        issues = "; ".join(f["message"] for f in flags)
+        out = {**out, "rationale": f"{decision.title()} by local AP policy: {issues or 'all mandatory checks passed'}."}
     yield ev(step="reason", status="done", mode=mode, ms=ms(t), data={**out, "decision": decision, "guard": note})
 
     draft = None
-    if decision != "approve" and {f["code"] for f in flags} & VENDOR_FIXABLE:
+    if MODE == "live" and decision != "approve" and out.get("draft"):
+        draft = out["draft"]
+        yield ev(step="draft", status="done", mode="live", ms=0, data={"email": draft})
+    elif MODE == "demo" and decision != "approve" and {f["code"] for f in flags} & VENDOR_FIXABLE:
         yield ev(step="draft", status="running")
         t = time.perf_counter()
-        draft, mode = await attempt(LIVE["ai_tool"], draft_live, draft_sim, inv, flags)
-        yield ev(step="draft", status="done", mode=mode, ms=ms(t), data={"email": draft})
+        draft = await draft_sim(inv, flags)
+        yield ev(step="draft", status="done", mode="demo", ms=ms(t), data={"email": draft})
     else:
         yield ev(step="draft", status="skipped")
 
     yield ev(step="act", status="running")
     t = time.perf_counter()
-    action, mode = await attempt(LIVE["workflow"], act_live, act_sim, inv, decision, out["rationale"])
+    action = await (act_live(inv, decision, out["rationale"]) if MODE == "live"
+                    else act_sim(inv, decision, out["rationale"]))
     yield ev(step="act", status="done", mode=mode, ms=ms(t), data=action)
 
     e = entry(inv["number"], inv["vendor"], inv["po"], inv["date"], inv["total"], STATUS[decision], flags,
               out["rationale"], now(), ms(started), "agent")
-    e.update(lines=inv["lines"], iban=inv["iban"], draft=draft, workflow=action, guard=note)
+    e.update(lines=inv["lines"], iban=inv["iban"], currency=inv["currency"], draft=draft,
+             workflow=action, guard=note)
     LEDGER.append(e)
     yield ev(step="result", entry=e)
 
@@ -573,11 +600,15 @@ async def review(iid: str, body: dict):
     # Policy §3: releasing a suspected bank-detail change needs a reason and a call-back on the number on file.
     if action == "approve" and e["status"] == "escalated" and not (reason and body.get("verified") is True):
         raise HTTPException(400, "Releasing an escalated invoice needs a reason and a confirmed call-back")
+    try:
+        if MODE == "live":
+            require_live_config()
+        route = await (act_live(e, action, f"Reviewed by {reviewer}: {reason or 'no reason given'}")
+                       if MODE == "live" else act_sim(e, action, reason))
+    except WorkflowError as exc:
+        raise HTTPException(502, str(exc)) from exc
     e.update(agent_status=e["status"], status="approved" if action == "approve" else "rejected",
-             reviewed_at=now().isoformat(), reviewed_by=reviewer, review_reason=reason)
-    if e["status"] == "approved":
-        e["workflow"], _ = await attempt(LIVE["workflow"], act_live, act_sim, e, "approve",
-                                         f"Released by {reviewer}: {reason or 'no reason given'}")
+             reviewed_at=now().isoformat(), reviewed_by=reviewer, review_reason=reason, workflow=route)
     return e
 
 
