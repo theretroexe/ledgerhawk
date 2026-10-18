@@ -14,6 +14,7 @@ import os
 import random
 import re
 import time
+import unicodedata
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -31,6 +32,7 @@ WF_POST = os.getenv("EVOLUS_WORKFLOW_POST_ID")  # approved -> post to ERP
 WF_REVIEW = os.getenv("EVOLUS_WORKFLOW_REVIEW_ID")  # anything else -> human review
 MODEL_NAME = os.getenv("AMD_MODEL_NAME", "Qwen2.5-7B-Instruct · vLLM on AMD Instinct MI300X")
 PRICE_TOLERANCE = 0.02  # 2% unit-price variance allowed before a hold
+MAX_UNIT, MAX_TOTAL = 1e9, 1e12  # any quantity, unit price or total beyond these is treated as unreadable
 MANUAL_MINUTES = 12  # assumed manual handling time per invoice, used for "hours saved"
 
 
@@ -129,8 +131,9 @@ def sample_pdf(inv):
 # --- Ledger: every processed invoice with its decision and audit trail ---
 # ponytail: in-memory, resets on restart; move to SQLite if the demo needs persistence.
 
-HIGH = {"duplicate", "bank_change", "unknown_vendor", "po_vendor_mismatch", "unreadable_amount"}
+HIGH = {"duplicate", "bank_change", "unknown_vendor", "po_vendor_mismatch", "unreadable_amount", "unreadable_number"}
 FLAG_TEXT = {
+    "unreadable_number": "Invoice number missing or unreadable",
     "unreadable_amount": "An amount on the invoice could not be read as a valid number",
     "duplicate": "Invoice number already processed for this vendor",
     "bank_change": "Bank details differ from the vendor master",
@@ -146,7 +149,7 @@ FLAG_TEXT = {
 STATUS = {"approve": "approved", "hold": "on_hold", "escalate": "escalated", "reject": "rejected"}
 # Which invoice field each control checks, so the UI can annotate that exact spot on the document.
 FIELD = {"duplicate": "number", "bank_change": "iban", "unknown_vendor": "vendor", "po_vendor_mismatch": "po",
-         "no_po": "po", "unknown_po": "po", "total_mismatch": "total", "unreadable_amount": "total",
+         "no_po": "po", "unknown_po": "po", "total_mismatch": "total", "unreadable_amount": "total", "unreadable_number": "number",
          "price_variance": "line", "qty_over": "line", "unordered_item": "line"}
 
 
@@ -250,8 +253,9 @@ def normalize(raw):
 
 
 def doc_key(s):
-    """Invoice numbers and vendor names compared without case, spaces or punctuation: 'AP-5510' == 'ap 5510'."""
-    return re.sub(r"[^A-Z0-9]", "", str(s or "").upper())
+    """Invoice numbers and vendor names compared without case, spaces or punctuation, Unicode-aware:
+    'AP-5510' == 'ap 5510' == 'ＡＰ－５５１０'."""
+    return re.sub(r"[\W_]", "", unicodedata.normalize("NFKC", str(s or "")).casefold())
 
 
 async def extract_sim(name, data, email):
@@ -275,13 +279,15 @@ async def extract_sim(name, data, email):
 def run_checks(inv):
     flags = []
     # Fail closed: a missing, non-numeric, infinite or negative amount escalates the invoice instead of passing.
-    bad = [i for i, l in enumerate(inv["lines"]) if l["qty"] is None or l["price"] is None or l["qty"] <= 0 or l["price"] < 0]
-    if bad or inv["total"] is None or inv["total"] <= 0:
+    # Upper bounds keep qty * price and the sums finite; anything beyond is an extraction error, not an invoice.
+    bad = [i for i, l in enumerate(inv["lines"]) if l["qty"] is None or l["price"] is None
+           or not 0 < l["qty"] <= MAX_UNIT or not 0 <= l["price"] <= MAX_UNIT]
+    if bad or inv["total"] is None or not 0 < inv["total"] <= MAX_TOTAL:
         where = f"line {bad[0] + 1}" if bad else "the total"
         flags.append(flag("unreadable_amount", 0, f"Could not read a valid amount on {where}; check the PDF by hand", amount=0))
-        for l in inv["lines"]:  # recorded as 0 so the ledger stays valid JSON; the flag above already stops payment
-            l["qty"], l["price"] = l["qty"] or 0, l["price"] or 0
-        inv["total"] = inv["total"] if inv["total"] and inv["total"] > 0 else 0
+        for i in bad:  # recorded as 0 so the ledger stays valid JSON; the flag above already stops payment
+            inv["lines"][i]["qty"] = inv["lines"][i]["price"] = 0
+        inv["total"] = inv["total"] if inv["total"] is not None and 0 < inv["total"] <= MAX_TOTAL else 0
     total = inv["total"]
     vendor = VENDORS.get(inv["vendor"])
     if not vendor:
@@ -289,8 +295,12 @@ def run_checks(inv):
     elif inv["iban"] and inv["iban"] != vendor["iban"]:
         flags.append(flag("bank_change", total, f"IBAN {inv['iban']} differs from master {vendor['iban']}"))
     key = doc_key(inv["number"])
-    prior = key and next((e for e in LEDGER if doc_key(e["vendor"]) == doc_key(inv["vendor"])
-                          and doc_key(e["number"]) == key), None)
+    prior = None
+    if not key:  # without a number the duplicate check can't run, so the invoice can't pass it
+        flags.append(flag("unreadable_number", total, "Invoice number missing or unreadable; check the PDF by hand"))
+    else:
+        prior = next((e for e in LEDGER if doc_key(e["vendor"]) == doc_key(inv["vendor"])
+                      and doc_key(e["number"]) == key), None)
     if prior:
         flags.append(flag("duplicate", total, f"{inv['number']} was already processed on {prior['processed_at'][:10]} "
                                               f"({prior['status'].replace('_', ' ')})"))

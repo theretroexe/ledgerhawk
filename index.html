@@ -488,7 +488,7 @@ const qty = n => Number.isInteger(n) ? n : n.toFixed(2);
 // The eight controls the agent runs; each maps to the flag codes that fail it.
 const CONTROLS = [
   ["Vendor in vendor master", ["unknown_vendor"]], ["Bank details match master", ["bank_change"]],
-  ["Not already processed", ["duplicate"]], ["Valid PO for this vendor", ["no_po", "unknown_po", "po_vendor_mismatch"]],
+  ["Not already processed", ["duplicate", "unreadable_number"]], ["Valid PO for this vendor", ["no_po", "unknown_po", "po_vendor_mismatch"]],
   ["Every item on the PO", ["unordered_item"]], ["Prices within 2% of PO", ["price_variance"]],
   ["Quantities within PO", ["qty_over"]], ["Amounts readable and add up", ["total_mismatch", "unreadable_amount"]],
 ];
@@ -496,7 +496,7 @@ const SHORT = {
   duplicate: "Duplicate invoice", bank_change: "Bank details changed", unknown_vendor: "Unknown vendor",
   po_vendor_mismatch: "PO issued to another vendor", no_po: "No purchase order", unknown_po: "PO not found",
   price_variance: "Price above PO", qty_over: "Quantity above PO", unordered_item: "Item not on PO", total_mismatch: "Total doesn't add up",
-  unreadable_amount: "Unreadable amount",
+  unreadable_amount: "Unreadable amount", unreadable_number: "Unreadable invoice number",
 };
 const STATUS = { approved: "Approved", on_hold: "On hold", escalated: "Stopped", rejected: "Rejected" };
 const TILE = { approved: "Approved", on_hold: "Held", escalated: "Stopped", rejected: "Rejected" };
