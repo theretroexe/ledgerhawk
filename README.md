@@ -2,6 +2,10 @@
 
 # LedgerHawk: accounts-payable control agent on Evolus × AMD
 
+### ▶ Live demo: **[ledgerhawk-vercel.vercel.app](https://ledgerhawk-vercel.vercel.app)**
+
+Open it and click any email in the inbox to watch the agent read, check and stamp the invoice. The demo runs in simulation mode (see [Going live](#going-live-evolus--amd)). The first visit after a quiet spell can take a few seconds to wake up.
+
 An AI agent that runs supplier-invoice intake end to end: it reads the invoice that arrives by email, matches it against the purchase order and vendor master, decides whether to pay, hold, escalate or reject it, drafts the query to the vendor, and fires the Evolus workflow that posts it to the ERP or routes it to a person. Every decision lands in an audit log with the agent's reasoning, and the analytics view shows the money it stopped.
 
 **Track:** Evolus Business Agents on AMD · AMD Developer Hackathon ACT III
@@ -49,6 +53,16 @@ Docker:
 docker build -t ledgerhawk .
 docker run -p 8000:8000 --env-file .env ledgerhawk
 ```
+
+## Deploy on Vercel
+
+The live demo is deployed from the [`vercel-deploy`](../../tree/vercel-deploy) branch. Vercel detects the FastAPI app in `app.py` on its own, so no extra config is needed; `.vercelignore` keeps the pitch materials out of the upload.
+
+```bash
+vercel deploy --prod
+```
+
+Add the `EVOLUS_*` variables from `.env.example` in the Vercel project settings to switch steps from simulated to live. The ledger is in memory, so each serverless instance starts from the seeded demo data.
 
 ## Going live (Evolus + AMD)
 
