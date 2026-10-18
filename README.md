@@ -42,6 +42,12 @@ docker build -t ledgerhawk .
 docker run -p 8000:8000 --env-file .env ledgerhawk
 ```
 
+## Submission materials
+
+Start with the [submission index](submission/README.md). The revised package in [submission/current/](submission/current/README.md) contains project descriptions, an architecture diagram, an eight-slide deck (HTML and PDF), a cover, a demo-mode Orbit screenshot, and a demo script. Older assets directly under `submission/` are retained for reference but are outdated; do not use their claims about Qwen/vLLM, ERP or email actions, automatic fallback, or measured business results.
+
+Before submission, verify the actual AMD-backed model and routing steps in the Evolus workspace, run all five cases in live mode, test the Docker image, and record the demo video. The dashboard's `AMD_MODEL_NAME` label and the demo-mode screenshot do not establish remote model use. A public repository and reachable app URL also remain to be prepared.
+
 ## Security and limits
 
 Keep `.env` out of Git and never paste credentials into issues or chat. The dashboard has no login, and its ledger lives in memory; use it as a demo, not a production payment system. The app accepts PDFs up to 20 MB. Live workflow requests time out, failed execution statuses surface to the user, and no audit entry is added for a failed pipeline. The local reviewer identity is self-reported; production use would require authentication and persistent records.

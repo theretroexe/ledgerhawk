@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="850" viewBox="0 0 1600 850" role="img" aria-labelledby="title description">
+  <title id="title">LedgerHawk implemented architecture</title>
+  <desc id="description">A PDF moves through an Evolus extraction workflow, local deterministic AP checks, an Evolus assessment workflow, a local decision guard, and an Evolus demo routing workflow. Local vendor and purchase-order data support checks. The model provider in the Evolus workspace needs separate verification.</desc>
+  <defs>
+    <style>
+      .bg{fill:#f5f5f2}.ink{fill:#19191c}.muted{fill:#555861}.eyebrow{font:700 20px Arial,sans-serif;letter-spacing:2px}.title{font:700 45px Arial,sans-serif}.h{font:700 26px Arial,sans-serif}.body{font:20px Arial,sans-serif}.small{font:17px Arial,sans-serif}.mono{font:17px monospace}.card{fill:#fff;stroke:#a9abb3;stroke-width:2}.evolus{fill:#f7f9ff;stroke:#244395;stroke-width:3}.local{fill:#fff;stroke:#202126;stroke-width:3}.note{fill:#fffaf0;stroke:#a05d00;stroke-width:2}.line{stroke:#5c606b;stroke-width:3;fill:none;marker-end:url(#arrow)}.data{stroke:#a05d00;stroke-width:3;fill:none;marker-end:url(#arrow)}
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M1 1 L11 6 L1 11 Z" fill="#5c606b"/></marker>
+  </defs>
+  <rect width="1600" height="850" class="bg"/>
+  <text x="46" y="70" class="eyebrow muted">IMPLEMENTED PIPELINE</text>
+  <text x="46" y="125" class="title ink">Three Evolus workflows. One local policy decision.</text>
+
+  <path d="M250 310 H282" class="line"/><path d="M500 310 H532" class="line"/><path d="M750 310 H782" class="line"/><path d="M1000 310 H1032" class="line"/><path d="M1250 310 H1282" class="line"/>
+
+  <rect x="45" y="200" width="205" height="220" rx="14" class="card"/>
+  <text x="65" y="240" class="eyebrow muted">INPUT</text>
+  <text x="65" y="282" class="h ink">PDF invoice</text>
+  <text x="65" y="320" class="body muted">Selected sample</text>
+  <text x="65" y="350" class="body muted">or uploaded PDF</text>
+  <text x="65" y="392" class="small muted">Optional email context</text>
+
+  <rect x="290" y="200" width="210" height="220" rx="14" class="evolus"/>
+  <text x="310" y="240" class="eyebrow" fill="#244395">EVOLUS 01</text>
+  <text x="310" y="282" class="h ink">Extract</text>
+  <text x="310" y="320" class="body muted">PDF → eight fields</text>
+  <text x="310" y="350" class="body muted">and line items</text>
+  <text x="310" y="392" class="small muted">multipart: file</text>
+
+  <rect x="540" y="200" width="210" height="220" rx="14" class="local"/>
+  <text x="560" y="240" class="eyebrow muted">LOCAL PYTHON</text>
+  <text x="560" y="282" class="h ink">Check</text>
+  <text x="560" y="320" class="body muted">Duplicate, IBAN,</text>
+  <text x="560" y="350" class="body muted">PO, lines, total</text>
+  <text x="560" y="392" class="small muted">Deterministic flags</text>
+
+  <rect x="790" y="200" width="210" height="220" rx="14" class="evolus"/>
+  <text x="810" y="240" class="eyebrow" fill="#244395">EVOLUS 02</text>
+  <text x="810" y="282" class="h ink">Assess</text>
+  <text x="810" y="320" class="body muted">Proposed decision,</text>
+  <text x="810" y="350" class="body muted">rationale, draft</text>
+  <text x="810" y="392" class="small muted">multipart: input</text>
+
+  <rect x="1040" y="200" width="210" height="220" rx="14" class="local"/>
+  <text x="1060" y="240" class="eyebrow muted">LOCAL PYTHON</text>
+  <text x="1060" y="282" class="h ink">Guard</text>
+  <text x="1060" y="320" class="body muted">Local result wins</text>
+  <text x="1060" y="350" class="body muted">if AI disagrees</text>
+  <text x="1060" y="392" class="small muted">Approve / hold /</text>
+  <text x="1060" y="413" class="small muted">escalate / reject</text>
+
+  <rect x="1290" y="200" width="260" height="220" rx="14" class="evolus"/>
+  <text x="1310" y="240" class="eyebrow" fill="#244395">EVOLUS 03</text>
+  <text x="1310" y="282" class="h ink">Record route</text>
+  <text x="1310" y="320" class="body muted">Validate demo-only</text>
+  <text x="1310" y="350" class="body muted">acknowledgement</text>
+  <text x="1310" y="392" class="small muted">No ERP, email, payment</text>
+
+  <rect x="450" y="490" width="390" height="135" rx="13" class="note"/>
+  <text x="475" y="532" class="h ink">Local reference data</text>
+  <text x="475" y="567" class="body muted">Vendor master · purchase orders</text>
+  <text x="475" y="599" class="body muted">Prior invoice ledger · AP policy</text>
+  <path d="M645 490 V432" class="data"/>
+
+  <rect x="1035" y="490" width="515" height="135" rx="13" class="card"/>
+  <text x="1060" y="532" class="h ink">Dashboard and audit trail</text>
+  <text x="1060" y="567" class="body muted">In-memory ledger · review queue · CSV</text>
+  <text x="1060" y="599" class="body muted">A failed live workflow adds no audit entry</text>
+  <path d="M1420 432 V490" class="line"/>
+
+  <rect x="45" y="685" width="1505" height="105" rx="13" fill="#fff" stroke="#a9abb3" stroke-dasharray="11 8" stroke-width="2"/>
+  <text x="70" y="730" class="h ink">Remote model setting is outside this repository</text>
+  <text x="70" y="765" class="body muted">AMD TokenFactory is the reported Evolus workspace configuration. Verify the actual provider/model and a live run there; the UI label alone is not evidence.</text>
+</svg>

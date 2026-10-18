@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280, initial-scale=1">
+<title>LedgerHawk cover</title>
+<style>
+  * { box-sizing:border-box; }
+  html, body { width:1280px; height:720px; margin:0; overflow:hidden; font-family:Arial,Helvetica,sans-serif; }
+  body { color:#f6f6f3; background:#141519; }
+  .frame { position:relative; width:1280px; height:720px; padding:75px; overflow:hidden; }
+  .frame:before { content:""; position:absolute; width:780px; height:780px; right:-250px; top:-220px; border:1px solid #50525c; border-radius:50%; }
+  .frame:after { content:""; position:absolute; width:620px; height:620px; right:-180px; top:-130px; border:1px solid #34363e; border-radius:50%; }
+  .eyebrow { position:relative; z-index:2; color:#aab0be; text-transform:uppercase; font-size:19px; font-weight:700; letter-spacing:.18em; margin-bottom:100px; }
+  h1 { position:relative; z-index:2; font-size:91px; letter-spacing:-.055em; line-height:1; margin:0 0 24px; }
+  .lede { position:relative; z-index:2; width:680px; font-size:34px; line-height:1.2; color:#d1d5df; margin:0; }
+  .tags { position:absolute; z-index:2; left:75px; bottom:80px; display:flex; gap:10px; }
+  .tag { border:1px solid #626979; color:#d1d5df; border-radius:4px; padding:10px 14px; font-size:17px; font-weight:700; }
+  .stack { position:absolute; right:62px; top:160px; width:420px; height:400px; z-index:3; }
+  .receipt { position:absolute; width:360px; height:195px; background:#fbfbf8; color:#202127; border-radius:8px; padding:25px; box-shadow:0 22px 45px #0007; }
+  .receipt:nth-child(1){left:3px;top:0;transform:rotate(-7deg)}
+  .receipt:nth-child(2){left:32px;top:105px;transform:rotate(5deg)}
+  .receipt:nth-child(3){left:9px;top:212px;transform:rotate(-2deg)}
+  .receipt b { display:block; font-size:23px; margin-bottom:17px; }
+  .line { display:block; height:11px; width:70%; background:#e3e4e6; border-radius:3px; margin:11px 0; }
+  .line.short { width:50%; }
+  .stamp { position:absolute; right:20px; bottom:19px; font-size:20px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; padding:5px 9px; border:3px solid currentColor; transform:rotate(-8deg); }
+  .approve { color:#244395; } .escalate { color:#bf2841; } .hold { color:#9a5d00; }
+</style>
+</head>
+<body>
+<main class="frame">
+  <div class="eyebrow">Accounts payable · controlled prototype</div>
+  <h1>LedgerHawk</h1>
+  <p class="lede">Invoice decisions you can inspect, question, and review.</p>
+  <div class="tags"><span class="tag">FastAPI dashboard</span><span class="tag">3 Evolus workflows</span><span class="tag">Local AP controls</span></div>
+  <div class="stack" aria-hidden="true">
+    <div class="receipt"><b>Invoice NW-2291</b><span class="line"></span><span class="line short"></span><span class="stamp approve">Approve</span></div>
+    <div class="receipt"><b>Invoice OC-3302</b><span class="line"></span><span class="line short"></span><span class="stamp escalate">Escalate</span></div>
+    <div class="receipt"><b>Invoice HX-7781</b><span class="line"></span><span class="line short"></span><span class="stamp hold">Hold</span></div>
+  </div>
+</main>
+</body>
+</html>

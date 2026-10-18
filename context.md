@@ -1,6 +1,6 @@
 # LedgerHawk Project Context
 
-**Snapshot: 2026-10-18.** This is the full starting context for a new contributor or ChatGPT conversation. For a shorter copyable handoff, see `CHATGPT_HANDOFF.md`. Work from `ledgerhawk/`, which is its own Git repository inside the wider workspace.
+**Snapshot: 2026-10-18.** This is the full starting context for a new contributor or ChatGPT conversation. Work from the LedgerHawk repository root. The revised presentation assets are indexed in `submission/README.md`.
 
 ## Purpose and change of direction
 
@@ -18,7 +18,7 @@ The project moved from an older proposed extractor/agent/email/ERP architecture 
 | `ap_policy.md` | AP rules sent to the assessment workflow; local code enforces the final decision. |
 | `test_app.py`, `test_workflows.py` | Offline regression checks and mocked live-workflow contract tests. |
 | `README.md`, `.env.example`, `Dockerfile` | Setup and container instructions; `.gitignore` and `.dockerignore` protect local configuration from Git and Docker build contexts. |
-| `submission/` | Older deck, cover, screenshots, descriptions, and video script. These are **stale** and must be updated before presentation. |
+| `submission/README.md`, `submission/current/` | Submission index and revised descriptions, architecture diagram, cover, eight-slide deck (HTML/PDF), demo screenshot, and script. Older assets directly under `submission/` remain **stale**. |
 
 Dependencies are pinned in `requirements.txt`: FastAPI, Uvicorn, HTTPX, and python-multipart. There is no database, frontend build step, or production authentication.
 
@@ -75,15 +75,15 @@ The Dockerfile runs the same app on port 8000; `.dockerignore` excludes local `.
 
 On 2026-10-18, `.ledgervenv/bin/python test_app.py` printed `ok`, and `.ledgervenv/bin/python -m unittest test_workflows.py -q` passed **7 tests**. The tests use simulations or mocks even if local `.env` selects live mode. They cover the five decisions, parsing of JSON `lines`, validation failures, polling failure/timeout, authoritative local overrides, and failure behavior. They do **not** prove the remote Evolus workspace's model configuration or its lack of side effects. Run a live five-case walkthrough separately before recording a demo.
 
-The LedgerHawk Evolus integration is still **uncommitted**. At this snapshot, modified tracked files include `.env.example`, `.gitignore`, `Dockerfile`, `README.md`, `ap_policy.md`, `app.py`, `index.html`, and `test_app.py`; new files include `.dockerignore`, `CHATGPT_HANDOFF.md`, `evolus_workflows.py`, `test_workflows.py`, and this context file. Check `git status --short` before making a commit. `.env` is ignored and must remain local.
+The app and Evolus integration were committed before the submission refresh. At this snapshot, the revised files under `submission/` are untracked. `CHATGPT_HANDOFF.md` also appears as a tracked deletion; that unrelated change has been left untouched. Check `git status --short` before committing. `.env` is ignored and must remain local.
 
 ## Boundaries and next work
 
-- Refresh `submission/` text, deck, cover, and screenshots from the current app. Remove unsupported claims about Qwen/vLLM, Evolus email/ERP actions, automatic fallback, and measured financial outcomes. Preserve the old assets until replacements are ready.
+- Review the revised materials in `submission/current/` before submission. They replace the stale descriptions, diagram, deck, cover, and script directly under `submission/`; the Orbit screenshot is from demo mode. Keep unsupported Qwen/vLLM, Evolus email/ERP, automatic fallback, and measured outcome claims out of the final submission.
 - Verify the actual AMD TokenFactory provider/model in the Evolus workspace and capture safe evidence of a meaningful AMD-backed live workflow. The [official event page](https://lablab.ai/ai-hackathons/amd-developer-hackathon-act-iii) requires meaningful AMD work for the main challenge and points participants to TokenFactory. Eligibility is for the organizers to decide. The Evolus partner track additionally specifies a team-owned AMD-hosted vLLM endpoint; the current repository does not establish that requirement.
 - Test the Docker image where Docker is available. A full submission also needs a public repository, reachable app URL, demo video, and slides. Do not expose a live app with real invoice data or credentials before adding appropriate access control.
 - For product use beyond a controlled demo, add authentication, persistent records, secure reviewer identity, and proper operational controls. The present app has in-memory data and no real payment or ERP integration.
 
 ## Copyable request for a new ChatGPT chat
 
-> I am continuing LedgerHawk, an existing FastAPI AP invoice demo. Read `ledgerhawk/context.md` and `ledgerhawk/CHATGPT_HANDOFF.md`, then inspect the current code and `git status` before changing anything. Keep the three Evolus workflows, deterministic AP decisions, and existing dashboard. The immediate work is to update stale submission materials and verify the live AMD TokenFactory evidence. Do not read out, change, or commit `.env` or any credential values. Work incrementally, test each change, and distinguish verified behavior from assumptions.
+> I am continuing LedgerHawk, an existing FastAPI AP invoice demo. Read `context.md`, `README.md`, `submission/README.md`, and `submission/current/README.md`, then inspect the current code and `git status` before changing anything. Keep the three Evolus workflows, deterministic AP decisions, and existing dashboard. The revised submission materials are in `submission/current/`; verify live AMD TokenFactory evidence and routing behavior, run the five live cases, test Docker, and prepare the video and public demo. Do not read out, change, or commit `.env` or any credential values. Work incrementally, test each change, and distinguish verified behavior from assumptions.

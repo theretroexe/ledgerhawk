@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LedgerHawk — current prototype pitch</title>
+<style>
+  :root { --paper:#f6f6f3; --white:#fff; --ink:#1b1c20; --muted:#535762; --rule:#d3d5d9; --blue:#244395; --blue-bg:#edf2ff; --red:#bf2841; --red-bg:#fff0f2; --ochre:#9a5d00; --ochre-bg:#fff7e8; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; background:#dedfdf; color:var(--ink); font-family:Arial, Helvetica, sans-serif; }
+  .deck { display:grid; gap:24px; justify-content:center; padding:24px; }
+  .slide { position:relative; width:1280px; height:720px; padding:54px 68px 52px; background:var(--paper); overflow:hidden; box-shadow:0 16px 40px #0002; display:flex; flex-direction:column; }
+  .slide:after { content:attr(data-page) " / 8"; position:absolute; right:34px; bottom:24px; color:#777b84; font:14px ui-monospace,monospace; }
+  .brand { position:absolute; left:68px; bottom:22px; color:var(--muted); font-weight:700; font-size:15px; letter-spacing:.02em; }
+  .eyebrow { margin:0 0 12px; color:var(--blue); text-transform:uppercase; letter-spacing:.15em; font-size:16px; font-weight:700; }
+  h1 { margin:0 0 26px; font-size:49px; line-height:1.06; letter-spacing:-.035em; max-width:1050px; }
+  h2 { margin:0 0 12px; font-size:27px; line-height:1.12; }
+  h3 { margin:0 0 8px; font-size:22px; }
+  p { margin:0; line-height:1.35; }
+  .lede { font-size:25px; color:var(--muted); max-width:860px; }
+  .small { font-size:16px; color:var(--muted); }
+  .grid { display:grid; gap:18px; }
+  .cols2 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .cols3 { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .card { background:var(--white); border:1px solid var(--rule); border-radius:12px; padding:24px; }
+  .card p { font-size:19px; color:var(--muted); }
+  .chip { display:inline-block; padding:6px 11px; border-radius:4px; border:1px solid currentColor; font-size:15px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
+  .blue { color:var(--blue); } .red { color:var(--red); } .ochre { color:var(--ochre); }
+  .blue-bg { background:var(--blue-bg); } .red-bg { background:var(--red-bg); } .ochre-bg { background:var(--ochre-bg); }
+  .foot { margin-top:auto; padding-bottom:5px; color:#656a73; font-size:15px; }
+  .hero { justify-content:center; }
+  .hero h1 { font-size:91px; margin-bottom:18px; }
+  .hero .lede { max-width:650px; font-size:31px; }
+  .hero .meta { margin-top:32px; display:flex; gap:12px; flex-wrap:wrap; max-width:710px; }
+  .hero-art { position:absolute; right:75px; top:165px; width:350px; height:365px; }
+  .hero-art .receipt { position:absolute; width:330px; height:200px; background:#fff; border:1px solid var(--rule); border-radius:8px; padding:22px; box-shadow:0 18px 30px #0002; }
+  .hero-art .receipt:nth-child(1) { transform:translate(0,0) rotate(-6deg); }
+  .hero-art .receipt:nth-child(2) { transform:translate(14px,78px) rotate(4deg); }
+  .hero-art .receipt:nth-child(3) { transform:translate(7px,158px) rotate(-2deg); }
+  .receipt b { display:block; margin-bottom:13px; font-size:19px; }
+  .receipt .line { display:block; height:11px; background:#e9eaec; margin:10px 0; border-radius:2px; }
+  .receipt .line.short { width:60%; }
+  .receipt .chip { position:absolute; right:17px; bottom:17px; transform:rotate(-5deg); }
+  .split { display:grid; grid-template-columns:1.05fr .95fr; gap:25px; align-items:stretch; }
+  .large-list { display:grid; gap:15px; padding:0; margin:0; list-style:none; }
+  .large-list li { display:flex; gap:16px; font-size:22px; line-height:1.25; }
+  .num { display:grid; place-items:center; flex:none; width:37px; height:37px; border-radius:50%; background:var(--blue-bg); color:var(--blue); font-weight:700; }
+  .flow { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; }
+  .flow .card { padding:18px; min-height:220px; }
+  .flow .card h2 { font-size:23px; }
+  .flow .card p { font-size:17px; }
+  .flow .step { font:700 15px ui-monospace,monospace; color:var(--blue); margin-bottom:22px; }
+  .ladder { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:22px; }
+  .ladder .card { padding:14px 17px; }
+  .ladder strong { display:block; font-size:18px; margin-bottom:6px; }
+  .ladder span { font-size:15px; color:var(--muted); }
+  .diagram { display:block; width:100%; height:500px; object-fit:contain; background:#f5f5f2; border:1px solid var(--rule); border-radius:9px; }
+  table { width:100%; border-collapse:collapse; background:var(--white); border:1px solid var(--rule); border-radius:8px; overflow:hidden; font-size:19px; }
+  th, td { text-align:left; padding:15px 19px; border-bottom:1px solid var(--rule); }
+  th { color:var(--muted); font-size:15px; text-transform:uppercase; letter-spacing:.09em; }
+  tr:last-child td { border-bottom:0; }
+  .shot { display:block; width:100%; height:450px; object-fit:cover; object-position:center 85%; border:1px solid var(--rule); border-radius:9px; background:#fff; }
+  .check { border-left:5px solid var(--blue); }
+  .limit { border-left:5px solid var(--ochre); }
+  @media print { @page { size:1280px 720px; margin:0; } html,body { background:#fff; print-color-adjust:exact; -webkit-print-color-adjust:exact; } .deck { display:block; padding:0; } .slide { box-shadow:none; break-after:page; page-break-after:always; } }
+</style>
+</head>
+<body>
+<main class="deck">
+  <section class="slide hero" data-page="1">
+    <p class="eyebrow">Accounts payable · controlled prototype</p>
+    <h1>LedgerHawk</h1>
+    <p class="lede">Invoice decisions you can inspect, question, and review.</p>
+    <div class="meta"><span class="chip blue">FastAPI dashboard</span><span class="chip blue">3 Evolus workflows</span><span class="chip blue">Local AP controls</span></div>
+    <div class="hero-art" aria-hidden="true">
+      <div class="receipt"><b>Invoice NW-2291</b><span class="line"></span><span class="line short"></span><span class="chip blue blue-bg">Approve</span></div>
+      <div class="receipt"><b>Invoice OC-3302</b><span class="line"></span><span class="line short"></span><span class="chip red red-bg">Escalate</span></div>
+      <div class="receipt"><b>Invoice HX-7781</b><span class="line"></span><span class="line short"></span><span class="chip ochre ochre-bg">Hold</span></div>
+    </div>
+    <div class="brand">LedgerHawk · Evolus workflows and deterministic review</div>
+  </section>
+
+  <section class="slide" data-page="2">
+    <p class="eyebrow">The problem and the user</p>
+    <h1>Every invoice needs context before it can move forward.</h1>
+    <div class="grid cols3">
+      <div class="card"><span class="chip red">Duplicate</span><h2 style="margin-top:18px">Second notices</h2><p>A reminder can reuse an invoice number already recorded for the same vendor.</p></div>
+      <div class="card"><span class="chip red">Bank details</span><h2 style="margin-top:18px">Changed IBAN</h2><p>The account on an invoice can differ from the vendor master and needs controller review.</p></div>
+      <div class="card"><span class="chip ochre">PO mismatch</span><h2 style="margin-top:18px">Price or PO</h2><p>A line can exceed its purchase-order price, or an invoice can omit a PO entirely.</p></div>
+    </div>
+    <div class="grid cols2" style="margin-top:20px">
+      <div class="card"><h3>AP clerk</h3><p>Sees the extracted fields, failed checks, and cases waiting for correction.</p></div>
+      <div class="card"><h3>Financial controller</h3><p>Sees high-risk flags, reviewer actions, and a searchable audit record.</p></div>
+    </div>
+    <p class="foot">The product processes selected or uploaded PDFs; it does not receive email automatically.</p>
+    <div class="brand">LedgerHawk</div>
+  </section>
+
+  <section class="slide" data-page="3">
+    <p class="eyebrow">The working flow</p>
+    <h1>Extract, check, assess, guard, record.</h1>
+    <div class="flow">
+      <div class="card"><div class="step">01 · EVOLUS</div><h2>Extract PDF</h2><p>Read eight header fields and line items from the invoice.</p></div>
+      <div class="card"><div class="step">02 · LOCAL</div><h2>Check facts</h2><p>Compare vendor, IBAN, duplicate, PO, quantities, prices, and total.</p></div>
+      <div class="card"><div class="step">03 · EVOLUS</div><h2>Assess</h2><p>Return a proposed decision, rationale, and optional display draft.</p></div>
+      <div class="card"><div class="step">04 · LOCAL</div><h2>Guard</h2><p>Apply authoritative policy if the proposal conflicts with the checks.</p></div>
+      <div class="card"><div class="step">05 · EVOLUS</div><h2>Record route</h2><p>Validate a demo-only acknowledgement; append the audit entry.</p></div>
+    </div>
+    <div class="ladder">
+      <div class="card red-bg"><strong class="red">Reject</strong><span>Duplicate invoice</span></div>
+      <div class="card red-bg"><strong class="red">Escalate</strong><span>Other high-risk flag</span></div>
+      <div class="card ochre-bg"><strong class="ochre">Hold</strong><span>Other mandatory failure</span></div>
+      <div class="card blue-bg"><strong class="blue">Approve</strong><span>All checks pass</span></div>
+    </div>
+    <p class="foot">Live mode surfaces workflow errors; demo mode uses local simulations. There is no automatic fallback between modes.</p>
+    <div class="brand">LedgerHawk</div>
+  </section>
+
+  <section class="slide" data-page="4">
+    <p class="eyebrow">Architecture</p>
+    <h1 style="font-size:42px;margin-bottom:14px">Local rules retain the final decision.</h1>
+    <img class="diagram" src="architecture.svg" alt="Diagram of three Evolus workflows around local checks, decision guard, and audit ledger">
+    <p class="foot">The remote model/provider is configured in Evolus and must be verified there. The dashboard's model label is not proof of hosting.</p>
+    <div class="brand">LedgerHawk</div>
+  </section>
+
+  <section class="slide" data-page="5">
+    <p class="eyebrow">Five synthetic test cases</p>
+    <h1>One interface. Five different outcomes.</h1>
+    <table>
+      <thead><tr><th>Invoice</th><th>Signal</th><th>Final decision</th></tr></thead>
+      <tbody>
+        <tr><td><b>Northwind NW-2291</b></td><td>Clean PO and bank match</td><td><span class="chip blue">Approve</span></td></tr>
+        <tr><td><b>Orbit OC-3302</b></td><td>IBAN differs from vendor master</td><td><span class="chip red">Escalate</span></td></tr>
+        <tr><td><b>Apex AP-5510</b></td><td>Invoice number already recorded</td><td><span class="chip red">Reject</span></td></tr>
+        <tr><td><b>Helix HX-7781</b></td><td>Unit price over PO tolerance</td><td><span class="chip ochre">Hold</span></td></tr>
+        <tr><td><b>Brightline BL-0917</b></td><td>Purchase order missing</td><td><span class="chip ochre">Hold</span></td></tr>
+      </tbody>
+    </table>
+    <p class="foot">Bundled sample PDFs and records are synthetic. The offline tests check these expected decisions.</p>
+    <div class="brand">LedgerHawk</div>
+  </section>
+
+  <section class="slide" data-page="6">
+    <p class="eyebrow">Current dashboard · demo-mode capture</p>
+    <h1 style="font-size:42px;margin-bottom:15px">The mismatch is visible beside the invoice.</h1>
+    <img class="shot" src="dashboard-orbit.png" alt="Current LedgerHawk demo dashboard showing Orbit invoice and a bank-detail mismatch">
+    <p class="foot">Captured from the current application with a synthetic Orbit invoice. Dashboard model labels are configuration text; this screenshot does not show a live model call.</p>
+    <div class="brand">LedgerHawk</div>
+  </section>
+
+  <section class="slide" data-page="7">
+    <p class="eyebrow">Control and auditability</p>
+    <h1>Failures and overrides stay visible.</h1>
+    <div class="grid cols2">
+      <div class="card check"><h2>Deterministic result</h2><p>Duplicate invoices are rejected. Other high-risk issues escalate. Remaining mandatory failures hold. Clean invoices approve. A conflicting assessment is overridden and logged.</p></div>
+      <div class="card check"><h2>Human review</h2><p>Exceptions enter a review queue. A release of an escalated invoice requires a named reviewer, reason, and call-back attestation.</p></div>
+      <div class="card limit"><h2>Live failure</h2><p>A failed or timed-out Evolus call is shown as an error. The app does not silently simulate a successful run or append an audit entry.</p></div>
+      <div class="card limit"><h2>Prototype boundary</h2><p>In-memory ledger and local master data. No authentication, outbound email, ERP posting, or payment execution.</p></div>
+    </div>
+    <p class="foot">The Audit tab's seeded figures are illustrative calculations, not measured customer results.</p>
+    <div class="brand">LedgerHawk</div>
+  </section>
+
+  <section class="slide" data-page="8">
+    <p class="eyebrow">Where it goes next</p>
+    <h1>Ready for a controlled demo. Clear path to validation.</h1>
+    <div class="split">
+      <div class="card"><h2>Working now</h2><ul class="large-list">
+        <li><span class="num">1</span><span>Five synthetic invoice outcomes with field-level evidence.</span></li>
+        <li><span class="num">2</span><span>Three integrated Evolus workflows in live mode.</span></li>
+        <li><span class="num">3</span><span>Authoritative local policy, review queue, and audit log.</span></li>
+      </ul></div>
+      <div class="card"><h2>Verify before wider use</h2><ul class="large-list">
+        <li><span class="num">1</span><span>Confirm the remote AMD model/provider and capture live evidence.</span></li>
+        <li><span class="num">2</span><span>Build and test the container; publish a controlled demo.</span></li>
+        <li><span class="num">3</span><span>Add authentication and persistent records for production.</span></li>
+      </ul></div>
+    </div>
+    <p class="foot">LedgerHawk makes invoice checks reviewable before any downstream payment process. It does not move money.</p>
+    <div class="brand">LedgerHawk · FastAPI · Evolus REST workflows</div>
+  </section>
+</main>
+</body>
+</html>

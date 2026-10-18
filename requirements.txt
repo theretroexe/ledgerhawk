@@ -1,3 +1,5 @@
+# Runtime dependencies for app.py and evolus_workflows.py.
+# Submission documents and images are static assets; they need no Python packages.
 fastapi==0.143.3
 uvicorn==0.54.0
 httpx==0.28.1
