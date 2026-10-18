@@ -253,9 +253,15 @@ def normalize(raw):
 
 
 def doc_key(s):
-    """Invoice numbers and vendor names compared without case, spaces or punctuation, Unicode-aware:
-    'AP-5510' == 'ap 5510' == 'ＡＰ－５５１０'."""
-    return re.sub(r"[\W_]", "", unicodedata.normalize("NFKC", str(s or "")).casefold())
+    """Invoice numbers and vendor names compared without case, spaces or punctuation, after NFKC folding:
+    'AP-5510' == 'ap 5510' == 'ＡＰ－５５１０'. Only ASCII letters and digits survive."""
+    return re.sub(r"[^a-z0-9]", "", unicodedata.normalize("NFKC", str(s or "")).casefold())
+
+
+def odd_chars(s):
+    """True when an invoice number has anything beyond ASCII letters, digits, spaces and common separators
+    after NFKC, e.g. Cyrillic look-alikes ('АР-5510') or invisible characters, which could dodge the duplicate check."""
+    return bool(re.search(r"[^A-Za-z0-9 \-_/.#]", unicodedata.normalize("NFKC", str(s or "")).strip()))
 
 
 async def extract_sim(name, data, email):
@@ -298,7 +304,10 @@ def run_checks(inv):
     prior = None
     if not key:  # without a number the duplicate check can't run, so the invoice can't pass it
         flags.append(flag("unreadable_number", total, "Invoice number missing or unreadable; check the PDF by hand"))
-    else:
+    elif odd_chars(inv["number"]):
+        flags.append(flag("unreadable_number", total, "Invoice number contains unusual characters, possibly look-alikes; "
+                                                       "check it against the PDF by hand"))
+    if key:
         prior = next((e for e in LEDGER if doc_key(e["vendor"]) == doc_key(inv["vendor"])
                       and doc_key(e["number"]) == key), None)
     if prior:

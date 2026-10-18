@@ -50,9 +50,10 @@ for variant in ("ap 5510", "AP_5510", " Ap-5510 ", "ＡＰ－５５１０"):
     inv["number"] = variant
     assert "duplicate" in {f["code"] for f in app.run_checks(inv)}, variant
 # ...and a missing or unreadable number fails closed instead of skipping the duplicate check.
-for blank in ("", "  ", "---", None):
+for blank in ("", "  ", "---", None, "АР-5510", "AP-5510​", "APㅤ-5510"):  # empty, Cyrillic look-alike, invisible chars
     fl = app.run_checks(dict(inv, number=blank))
-    assert "unreadable_number" in {f["code"] for f in fl} and app.rule_decision(fl) == "escalate", (blank, fl)
+    # payment must stop: escalated, or rejected outright when it also matches a paid invoice
+    assert "unreadable_number" in {f["code"] for f in fl} and app.rule_decision(fl) in ("escalate", "reject"), (blank, fl)
 
 rec = app.records()
 assert len(rec["vendors"]) == len(app.VENDORS) and rec["purchase_orders"][0]["ordered"] == 3900.0
