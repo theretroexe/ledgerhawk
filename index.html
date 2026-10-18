@@ -1,0 +1,1150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LedgerHawk</title>
+<script>
+  // Resolve the theme before first paint. A saved choice wins; otherwise follow the OS.
+  try { document.documentElement.dataset.theme = localStorage.getItem("lh-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); }
+  catch { document.documentElement.dataset.theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"; }
+</script>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ---------- Tokens: neutral shell; colour only where it carries meaning (blue approve, ochre hold, red stop) ---------- */
+:root {
+  --desk: #F4F4F2; --desk-2: #EAEAE7; --panel: #FFFFFF; --chrome: rgb(244 244 242 / .8);
+  --ink: #18181B; --ink-2: #52525B; --ink-3: #6B6B74; --rule: rgb(24 24 27 / .08); --rule-2: rgb(24 24 27 / .16);
+  --blue: #1F3A93; --red: #C4203A; --ochre: #9A5B00;
+  --blue-soft: rgb(31 58 147 / .08); --red-soft: rgb(196 32 58 / .08); --ochre-soft: rgb(154 91 0 / .09);
+  --paper: #FBFBF9;
+  --paper-shadow: 0 0 0 1px rgb(24 24 27 / .08), 0 1px 2px rgb(24 24 27 / .04), 0 20px 44px -22px rgb(24 24 27 / .22);
+  /* critically damped spring, response ≈ .35s, no overshoot */
+  --spring: linear(0, .075 5%, .227 10%, .39 15%, .536 20%, .75 30%, .874 40%, .938 50%, .971 60%, .986 70%, .994 80%, 1);
+  --sans: "IBM Plex Sans", system-ui, sans-serif;
+  --cond: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  color-scheme: light;
+}
+@supports not (transition-timing-function: linear(0, 1)) { :root { --spring: cubic-bezier(.2, .8, .2, 1); } }
+/* Dark tokens live in one place; the head script sets data-theme from the saved choice or the OS. */
+:root[data-theme="dark"] {
+  --desk: #0E0E10; --desk-2: #09090B; --panel: #161618; --chrome: rgb(14 14 16 / .78);
+  --ink: #EDEDEC; --ink-2: #A1A1AA; --ink-3: #8B8B94; --rule: rgb(237 237 236 / .08); --rule-2: rgb(237 237 236 / .16);
+  --blue: #9DB0F2; --red: #F26D80; --ochre: #E2A54B;
+  --blue-soft: rgb(157 176 242 / .12); --red-soft: rgb(242 109 128 / .12); --ochre-soft: rgb(226 165 75 / .12);
+  --paper: #E9E9E5; --paper-shadow: 0 0 0 1px rgb(0 0 0 / .5), 0 30px 60px -24px rgb(0 0 0 / .8);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--desk); color: var(--ink); font: 400 16px/1.5 var(--sans); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: var(--blue); text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 4px; }
+.mono { font-family: var(--mono); font-size: .94em; letter-spacing: .01em; }
+.muted { color: var(--ink-3); }
+[hidden] { display: none !important; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- Chrome ---------- */
+.bar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 28px; padding: 0 32px; height: 60px;
+  background: var(--chrome); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);
+  box-shadow: 0 1px 0 var(--rule); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .bar { background: var(--desk); } }
+@media (prefers-reduced-transparency: reduce) { .bar { background: var(--desk); backdrop-filter: none; -webkit-backdrop-filter: none; } }
+.brand { display: flex; align-items: center; gap: 10px; font: 600 17px/1 var(--sans); letter-spacing: -.012em; white-space: nowrap; }
+.brand svg { color: var(--ink); flex: none; }
+.brand small { font: 400 13.5px/1 var(--sans); letter-spacing: 0; color: var(--ink-3); padding-left: 10px; border-left: 1px solid var(--rule-2); }
+.right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+.model { font-size: 13px; color: var(--ink-2); padding: 5px 10px; border: 1px solid var(--rule-2); border-radius: 99px; white-space: nowrap; }
+.icon-btn { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--rule-2); background: transparent; display: grid; place-items: center; color: var(--ink-2); transition: transform 100ms ease-out; }
+.icon-btn:active { transform: scale(.94); }
+:root[data-theme="dark"] .sun, :root[data-theme="light"] .moon { display: none; }
+.tabs { display: flex; gap: 22px; height: 100%; }
+.tab { position: relative; border: 0; background: none; padding: 0; height: 100%; font-weight: 500; color: var(--ink-3); }
+.tab::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--ink); transform: scaleX(0); transition: transform 500ms var(--spring); }
+.tab[aria-selected="true"] { color: var(--ink); }
+.tab[aria-selected="true"]::after { transform: scaleX(1); }
+.mode { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-2); }
+.mode i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.mode[data-live="true"] i { background: var(--blue); border-color: var(--blue); box-shadow: 0 0 0 4px var(--blue-soft); }
+
+main { max-width: 1440px; margin: 0 auto; padding: 28px 32px 64px; }
+
+/* ---------- Inbox strip ---------- */
+.inbox-head { display: flex; align-items: baseline; gap: 12px; margin: 0 0 12px; }
+.inbox-head h1 { font: 600 15px/1.2 var(--sans); margin: 0; }
+.inbox { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-bottom: 32px; }
+.tile { position: relative; display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 14px 14px 12px; border-radius: 12px;
+  border: 1px solid var(--rule); background: var(--panel); min-height: 132px; transition: transform 100ms ease-out, border-color 200ms; }
+.tile:active:not([aria-disabled="true"]) { transform: scale(.97); }
+.tile:hover:not([aria-disabled="true"]) { border-color: var(--rule-2); }
+.tile[aria-current="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.tile[aria-disabled="true"]:not([aria-current="true"]) { opacity: .55; cursor: progress; }
+.t-from { font-size: 13px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-subj { font-weight: 600; font-size: 15px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.t-file { margin-top: auto; align-self: flex-start; font: 500 12.5px/1 var(--mono); padding: 5px 7px; border-radius: 5px; background: var(--paper); color: #1C2127; box-shadow: 0 0 0 1px var(--rule); }
+.t-out { position: absolute; right: 10px; top: 10px; background: var(--panel); font: 600 12px/1 var(--cond); letter-spacing: .04em; text-transform: uppercase; color: var(--c); border: 1.5px solid var(--c); border-radius: 4px; padding: 4px 6px; transform: rotate(-4deg); }
+.drop { align-items: center; justify-content: center; text-align: center; border-style: dashed; border-color: var(--rule-2); background: transparent; color: var(--ink-2); font-size: 14px; cursor: pointer; }
+.drop.over { border-color: var(--blue); background: var(--blue-soft); color: var(--ink); }
+.drop b { color: var(--ink); font-weight: 600; }
+
+/* ---------- Desk: paper + rail ---------- */
+.desk { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 40px; align-items: start; }
+.sheet { min-width: 0; }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 12px; }
+.caption { margin: 0; font-size: 14px; color: var(--ink-3); min-height: 21px; }
+.seg { display: inline-flex; flex: none; padding: 2px; border: 1px solid var(--rule-2); border-radius: 9px; }
+.seg button { border: 0; background: none; padding: 5px 12px; border-radius: 7px; font-size: 14px; font-weight: 500; color: var(--ink-3); }
+.seg button[aria-selected="true"] { background: var(--ink); color: var(--desk); }
+.json-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; font-size: 14px; }
+.json-actions { display: flex; gap: 8px; }
+.json pre, pre.raw { margin: 0; background: var(--panel); border: 1px solid var(--rule); border-radius: 12px; padding: 18px 20px;
+  font: 13.5px/1.6 var(--mono); color: var(--ink); max-height: 72vh; overflow: auto; tab-size: 2; }
+pre.raw { max-height: 320px; margin-top: 8px; font-size: 12.5px; }
+.jk { color: var(--ink-3); } .jn { color: var(--blue); } .jl { color: var(--ochre); }
+details.rawd summary { cursor: pointer; color: var(--ink-2); font-size: 14px; }
+.legend { display: flex; gap: 20px; flex-wrap: wrap; margin: 14px 0 0; font-size: 13.5px; color: var(--ink-3); }
+.legend b { font-weight: 600; margin-right: 4px; }
+
+.paper {
+  /* the document keeps paper inks in dark mode: it is an object on the desk, not UI */
+  --p-ink: #1C2127; --p-ink-2: #4B555D; --p-ink-3: #6F7982; --p-rule: rgb(28 33 39 / .13);
+  --p-blue: #1F3A93; --p-red: #C4203A; --p-ochre: #9A5B00; --hl: rgb(31 58 147 / .14); --margin: 230px;
+  position: relative; color: var(--p-ink); background: var(--paper); box-shadow: var(--paper-shadow); border-radius: 3px;
+  min-height: 640px; padding: 0 0 200px; display: grid; grid-template-columns: minmax(0, 1fr) var(--margin); column-gap: 32px; align-content: start;
+  transform-origin: 50% 60%;
+}
+.paper::before { /* the auditor's margin rule */
+  content: ""; position: absolute; top: 0; bottom: 0; right: calc(var(--margin) + 16px); width: 1px; background: rgb(196 32 58 / .32); }
+.band { grid-column: 1 / -1; height: 10px; margin-bottom: 36px; border-radius: 3px 3px 0 0;
+  background: repeating-linear-gradient(135deg, rgb(24 24 27 / .07) 0 2px, transparent 2px 7px); }
+.row { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: start; padding: 0 0 0 48px; }
+.row > .c { min-width: 0; }
+.head { margin-bottom: 26px; }
+.vendor { font: 600 30px/1.05 var(--cond); letter-spacing: -.012em; margin: 0; display: inline; }
+.doc-title { margin: 6px 0 0; font-size: 15px; color: var(--p-ink-3); }
+.kv .c { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 16px; padding: 7px 0; border-top: 1px solid var(--p-rule); }
+.k { color: var(--p-ink-3); font-size: 15px; }
+.v { font-size: 16.5px; }
+.lines-h { margin-top: 28px; }
+.lines-h .c, .line .c { display: grid; grid-template-columns: minmax(0, 1fr) 56px 108px 116px; gap: 12px; padding: 9px 0; }
+.lines-h .c { font-size: 14px; color: var(--p-ink-3); border-bottom: 1.5px solid var(--p-ink); padding-bottom: 6px; }
+.line .c { border-bottom: 1px solid var(--p-rule); font-size: 16px; }
+.num { text-align: right; }
+.total .c { display: grid; grid-template-columns: 1fr auto; padding: 14px 0 0; font-size: 19px; font-weight: 600; }
+.total .k { font-size: 16px; font-weight: 500; color: var(--p-ink); }
+
+/* extraction: highlighter wipe in reading order */
+.fv { position: relative; background: linear-gradient(var(--hl), var(--hl)) no-repeat 0 88% / 0% 42%;
+  transition: background-size 260ms cubic-bezier(.2, .8, .2, 1) calc(var(--i, 0) * 55ms); }
+.paper[data-read] .fv { background-size: 100% 42%; }
+.paper[data-checked] .fv { background-size: 0% 42%; transition-delay: 0ms; }
+.fv svg { position: absolute; left: -3%; bottom: -7px; width: 106%; height: 9px; overflow: visible; pointer-events: none; }
+.fv path { fill: none; stroke: var(--p-red); stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; vector-effect: non-scaling-stroke;
+  transition: stroke-dashoffset 380ms ease-out calc(var(--j, 0) * 70ms); }
+.fv.var path { stroke: var(--p-ochre); }
+.paper[data-checked] .fv path { stroke-dashoffset: 0; }
+.dc { color: var(--p-red); font-weight: 600; box-shadow: inset 0 -2px 0 var(--p-red); }
+
+/* evidence in the margin */
+.note { font-size: 14px; line-height: 1.35; padding: 8px 18px 6px 0; color: var(--p-ink-3); opacity: 0; transform: translateX(-8px);
+  transition: opacity 150ms ease-out calc(var(--j, 0) * 70ms + 120ms), transform 500ms var(--spring) calc(var(--j, 0) * 70ms + 120ms); }
+.paper[data-checked] .note { opacity: 1; transform: none; }
+.note .g { display: inline-block; width: 18px; font-weight: 600; }
+.note.ok .g { color: var(--p-blue); }
+.note.var { color: var(--p-ochre); font-weight: 500; }
+.note.fail { color: var(--p-red); font-weight: 500; }
+.note .sub { display: block; margin: 4px 0 0 18px; color: var(--p-ink-2); font-weight: 400; }
+.note .mono { font-size: 13px; }
+
+/* reading skeleton */
+.ghost { grid-column: 1; padding-left: 48px; }
+.ghost i { display: block; height: 14px; border-radius: 3px; background: var(--p-rule); margin: 0 0 18px; }
+.paper[data-state="reading"] .ghost i { animation: breathe 1.4s ease-in-out infinite alternate; }
+@keyframes breathe { from { opacity: .45; } to { opacity: 1; } }
+.empty { grid-column: 1; padding: 64px 48px 0; max-width: 46ch; color: var(--p-ink-2); }
+.empty p:first-child { font: 600 24px/1.2 var(--cond); color: var(--p-ink); margin: 0 0 10px; }
+
+/* the stamp: ink on paper */
+.stamp { --rot: -6deg; --dx: 0px; --dy: 0px; position: absolute; right: calc(var(--margin) + 64px); bottom: 34px; z-index: 2;
+  color: var(--sc); border: 4px solid var(--sc); border-radius: 6px; padding: 10px 14px 9px; max-width: 330px;
+  mix-blend-mode: multiply; opacity: .9; filter: url(#rough); transform: translate(var(--dx), var(--dy)) rotate(var(--rot));
+  animation: land 190ms cubic-bezier(.55, 0, .8, .2) both; }
+.stamp.second { --rot: 3deg; --dx: -150px; --dy: -14px; }
+.s-head { margin: 0; font: 700 25px/1.05 var(--cond); letter-spacing: .05em; text-transform: uppercase; }
+.s-f { display: grid; grid-template-columns: auto 1fr; gap: 1px 10px; margin: 8px 0 0; padding-top: 6px; border-top: 2px solid currentColor;
+  font: 500 12.5px/1.3 var(--cond); letter-spacing: .02em; }
+.s-f dt { opacity: .8; } .s-f dd { margin: 0; font-weight: 600; }
+.s-approve { --sc: var(--p-blue); border-style: double; border-width: 6px; }
+.s-hold { --sc: var(--p-ochre); border-style: dashed; border-width: 3px; }
+.s-stop { --sc: var(--p-red); }
+.s-dup { --sc: var(--p-red); }
+.s-dup .s-head { text-decoration: line-through 3px; text-decoration-skip-ink: none; }
+.stamp.void { opacity: .55; }
+.strike { position: absolute; inset: -6px; width: calc(100% + 12px); height: calc(100% + 12px); overflow: visible; }
+.strike line { stroke: var(--p-ink); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; vector-effect: non-scaling-stroke; animation: draw 250ms ease-out 60ms forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes land {
+  from { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(calc(var(--rot) - 4deg)) scale(1.4); }
+  to { opacity: .9; transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(1); }
+}
+.paper.thud { animation: thud 320ms cubic-bezier(.2, .8, .2, 1); }
+@keyframes thud { 30% { transform: scale(.996); } }
+
+/* ---------- Rail ---------- */
+.rail { position: sticky; top: 84px; max-height: calc(100vh - 100px); overflow: auto; background: var(--panel); border-radius: 14px; padding: 20px 22px 22px; box-shadow: 0 0 0 1px var(--rule); }
+.rail-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+.rail-head h2 { margin: 0; font: 600 15px/1.2 var(--sans); }
+.clock { font: 500 14px/1 var(--mono); color: var(--ink-2); }
+.steps-wrap { position: relative; }
+.steps-wrap::before, .fill { content: ""; position: absolute; left: 11px; top: 14px; bottom: 14px; width: 2px; background: var(--rule); }
+.fill { background: var(--ink); transform-origin: top; transform: scaleY(var(--progress, 0)); transition: transform 500ms var(--spring); }
+.steps { list-style: none; margin: 0; padding: 0; position: relative; }
+.step { display: grid; grid-template-columns: 24px 1fr; gap: 14px; padding: 4px 0 16px; }
+.node { width: 24px; height: 24px; border-radius: 50%; background: var(--panel); border: 2px solid var(--rule-2); display: grid; place-items: center; font-size: 12px; font-weight: 600; color: var(--panel); transition: background 200ms, border-color 200ms; }
+.step[data-state="run"] .node { border-color: var(--blue); }
+.step[data-state="run"] .node::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--blue); animation: breathe .7s ease-in-out infinite alternate; }
+.step[data-state="done"] .node { background: var(--ink); border-color: var(--ink); }
+.step[data-state="skip"] .node { border-style: dashed; }
+.step[data-state="idle"] .s-title, .step[data-state="skip"] .s-title { color: var(--ink-3); }
+.s-title { font-weight: 600; line-height: 1.3; }
+.s-eng { font-size: 13.5px; color: var(--ink-3); }
+.s-meta { display: flex; gap: 10px; align-items: baseline; font-size: 13px; color: var(--ink-3); margin-top: 2px; }
+.s-meta .t { font-family: var(--mono); color: var(--ink-2); }
+.m-live { color: var(--blue); font-weight: 500; }
+.m-fallback { color: var(--ochre); font-weight: 500; }
+.s-out { font-size: 14.5px; margin-top: 6px; color: var(--ink-2); }
+.s-out:empty { display: none; }
+.s-out ul { margin: 4px 0 0; padding-left: 18px; }
+.s-out blockquote { margin: 0; padding-left: 12px; border-left: 2px solid var(--rule-2); color: var(--ink); }
+.s-out pre { white-space: pre-wrap; margin: 0; max-height: 10.5em; overflow: auto; font: 14px/1.5 var(--sans); background: var(--desk); padding: 10px 12px; border-radius: 8px; color: var(--ink); }
+.guard { color: var(--ochre); margin-top: 6px; }
+
+.verdict { margin-top: 6px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.v-head { margin: 0; font: 600 18px/1.3 var(--sans); letter-spacing: -.012em; color: var(--c); }
+.v-sub { margin: 6px 0 0; font-size: 14.5px; color: var(--ink-2); }
+.c-approved { --c: var(--blue); } .c-on_hold { --c: var(--ochre); } .c-escalated, .c-rejected { --c: var(--red); }
+
+/* review form */
+.review { margin-top: 16px; display: grid; gap: 12px; }
+.r-title { margin: 0; font-weight: 600; font-size: 15px; }
+.fld { display: grid; gap: 4px; font-size: 14px; color: var(--ink-2); }
+.fld input, .fld textarea { background: var(--desk); border: 1px solid var(--rule-2); border-radius: 8px; padding: 8px 10px; font-size: 15px; color: var(--ink); resize: vertical; }
+.chk { display: grid; grid-template-columns: 20px 1fr; gap: 8px; font-size: 14px; color: var(--ink); align-items: start; }
+.chk input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--blue); }
+.r-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.r-err { margin: 0; color: var(--red); font-size: 14px; }
+.r-err:empty { display: none; }
+.btn { border: 1px solid var(--rule-2); background: transparent; padding: 9px 15px; border-radius: 9px; font-weight: 500; font-size: 15px; transition: transform 100ms ease-out; }
+.btn:active:not(:disabled) { transform: scale(.97); }
+.btn.primary { background: var(--ink); border-color: var(--ink); color: var(--desk); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn.small { padding: 6px 11px; font-size: 14px; }
+
+/* ---------- Audit view ---------- */
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 48px; align-items: end; padding: 12px 0 36px; border-bottom: 1px solid var(--rule); }
+.h-label { margin: 0 0 6px; font-size: 16px; color: var(--ink-2); }
+.big { margin: 0; font: 600 clamp(64px, 9vw, 136px)/.9 var(--cond); letter-spacing: -.035em; color: var(--red); }
+.h-sub { margin: 14px 0 0; max-width: 44ch; color: var(--ink-2); }
+.delta { display: inline-block; margin: 14px 0 0; font-weight: 600; color: var(--blue); background: var(--blue-soft); padding: 4px 10px; border-radius: 6px; }
+.chart figcaption { display: flex; justify-content: space-between; font-size: 14px; color: var(--ink-2); margin-bottom: 8px; }
+.chart .key { display: flex; gap: 14px; }
+.chart .key span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; background: var(--k); vertical-align: -1px; }
+.chart svg { display: block; width: 100%; height: auto; }
+.chart.grow rect { transform-box: fill-box; transform-origin: bottom; animation: rise 420ms var(--spring) both; animation-delay: calc(var(--n) * 12ms); }
+@keyframes rise { from { transform: scaleY(0); } }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; padding: 22px 0; border-bottom: 1px solid var(--rule); }
+.stats div { padding: 0 24px; border-left: 1px solid var(--rule); }
+.stats div:first-child { padding-left: 0; border-left: 0; }
+.stats dt { font-size: 14px; color: var(--ink-3); }
+.stats dd { margin: 2px 0 0; font: 600 30px/1.15 var(--sans); letter-spacing: -.025em; }
+.stats dd small { font: 400 14px var(--sans); color: var(--ink-3); letter-spacing: 0; margin-left: 4px; }
+.block { padding: 32px 0 0; scroll-margin-top: 72px; }
+.block h2 { margin: 0 0 4px; font: 600 18px/1.25 var(--sans); letter-spacing: -.012em; }
+.block .lede { margin: 0 0 14px; font-size: 14.5px; color: var(--ink-3); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 10px 12px 10px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-weight: 500; font-size: 13.5px; color: var(--ink-3); }
+td.num, th.num { text-align: right; padding-right: 0; }
+.scroll { overflow-x: auto; }
+.chip { display: inline-block; font: 600 12px/1 var(--cond); letter-spacing: .04em; text-transform: uppercase; color: var(--c); border: 1.5px solid var(--c); border-radius: 4px; padding: 4px 6px; white-space: nowrap; }
+.late { color: var(--red); font-weight: 500; }
+.bars { display: grid; gap: 12px; }
+.bar-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; font-size: 15px; }
+.bar-row .n { color: var(--ink-2); font-family: var(--mono); font-size: 14px; }
+.bar-row .track { grid-column: 1 / -1; height: 4px; background: var(--rule); border-radius: 2px; }
+.bar-row .track i { display: block; height: 100%; border-radius: 2px; background: var(--k, var(--ink)); }
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+.toolbar input, .toolbar select, #rq { background: var(--panel); border: 1px solid var(--rule-2); border-radius: 9px; padding: 8px 12px; font-size: 15px; }
+.toolbar input { flex: 1; min-width: 200px; }
+.count { display: flex; gap: 12px; align-items: baseline; font-size: 14px; color: var(--ink-3); margin: 4px 0 6px; min-height: 22px; }
+.linkish { border: 0; background: none; padding: 0; color: var(--blue); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+button.bar-row { border: 0; background: none; padding: 4px 6px; margin: -4px -6px; border-radius: 8px; text-align: left; width: calc(100% + 12px); }
+button.bar-row:hover { background: var(--panel); }
+.rec-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; padding-bottom: 8px; }
+.page-title { margin: 0 0 4px; font: 600 26px/1.2 var(--sans); letter-spacing: -.022em; }
+.rec-head .lede { margin: 0; color: var(--ink-3); font-size: 15px; max-width: 60ch; }
+#rq { width: min(380px, 100%); }
+.po-lines { margin: 0; padding: 0; list-style: none; font-size: 14.5px; color: var(--ink-2); }
+.meter { width: 120px; height: 4px; border-radius: 2px; background: var(--rule); margin-top: 6px; }
+.meter i { display: block; height: 100%; border-radius: 2px; background: var(--ink-3); }
+mark { background: var(--blue-soft); color: inherit; border-radius: 2px; }
+tr.log { cursor: pointer; }
+tr.log:hover td { background: var(--panel); }
+tr.why td { background: var(--panel); font-size: 14.5px; color: var(--ink-2); }
+tr.why p { margin: 0 0 6px; }
+.foot { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--rule); display: flex; justify-content: space-between; align-items: center; gap: 16px; font-size: 14px; color: var(--ink-3); }
+
+/* ---------- View transition: the PDF chip becomes the paper ---------- */
+::view-transition-group(doc) { animation-duration: 450ms; animation-timing-function: var(--spring); }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1360px) { .pitch { display: none; } }
+@media (max-width: 1100px) { .model { display: none; } }
+@media (max-width: 1180px) {
+  .inbox { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .desk { grid-template-columns: minmax(0, 1fr) 340px; gap: 28px; }
+  .paper { --margin: 190px; }
+}
+@media (max-width: 960px) {
+  .bar { padding: 0 16px; gap: 16px; }
+  .mode span { display: none; }
+  main { padding: 20px 16px 48px; }
+  .inbox { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; }
+  .tile { flex: 0 0 220px; scroll-snap-align: start; }
+  .desk { grid-template-columns: 1fr; }
+  .rail { position: static; max-height: none; }
+  .paper { grid-template-columns: 1fr; min-height: 0; }
+  .paper::before { display: none; }
+  .row { padding: 0 20px; }
+  .note { padding: 0 0 10px 132px; }
+  .line .note, .total .note, .head .note { padding-left: 0; }
+  .lines-h .c, .line .c { grid-template-columns: minmax(0, 1fr) 40px 84px 92px; gap: 8px; font-size: 14.5px; }
+  .stamp { right: 20px; bottom: 20px; }
+  .ghost, .empty { padding-left: 20px; padding-right: 20px; }
+  .hero, .two { grid-template-columns: 1fr; gap: 28px; }
+  .stats { grid-template-columns: 1fr 1fr; gap: 16px 0; }
+  .stats div:nth-child(3) { padding-left: 0; border-left: 0; }
+}
+@media (max-width: 560px) {
+  .kv .c { grid-template-columns: 1fr; gap: 0; }
+  .note { padding-left: 0; }
+  .brand span { display: none; }
+}
+
+/* ---------- Reduced motion: cross-fades, no travel ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 1ms !important; transition-delay: 0ms !important; animation-duration: 1ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; }
+  .stamp { animation: fade 150ms both !important; }
+  @keyframes fade { from { opacity: 0; } }
+}
+@media (prefers-contrast: more) {
+  :root { --rule: rgb(28 33 39 / .35); --rule-2: rgb(28 33 39 / .6); }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency=".8" numOctaves="2" seed="4"/><feDisplacementMap in="SourceGraphic" scale="1.6"/></filter>
+</svg>
+
+<header class="bar">
+  <div class="brand">
+    <svg width="34" height="34" viewBox="0 0 64 64" aria-hidden="true"><path fill="currentColor" d="M37.41 31.34 L45.23 25.88 L52.62 28.21 L51.31 32.95 L51.49 33.05 L55.78 26.99 L44.77 22.52 L35.79 29.06ZM49.32 31.41 L41.47 31.86 L36.66 36.39 L38.14 38.01 L42.53 34.14 L49.48 32.59ZM34.35 24.93 L2.05 8.11 L1.95 8.29 L32.65 27.87ZM26.85 25.97 L3.65 14.01 L3.55 14.19 L25.55 28.23ZM22.10 28.16 L4.15 19.11 L4.05 19.29 L20.90 30.24ZM17.35 30.45 L4.65 24.31 L4.55 24.49 L16.25 32.35ZM30.78 20.86 L21.49 3.56 L21.31 3.64 L28.42 21.94ZM26.59 18.78 L15.88 6.54 L15.72 6.66 L25.01 20.02ZM35.86 38.82 L28.30 42.53 L19.51 43.80 L19.69 45.40 L28.90 44.67 L36.94 41.18ZM19.22 43.81 L4.59 47.10 L4.61 47.30 L19.58 46.19ZM20.32 46.81 L7.96 53.91 L8.04 54.09 L21.28 48.79Z"/><circle cx="46.4" cy="27.5" r="1.1" fill="var(--red)"/></svg>
+    <span>LedgerHawk</span><small class="pitch">Stops duplicate and fraudulent invoices before payment</small>
+  </div>
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button class="tab" role="tab" aria-selected="true" aria-controls="intake" data-view="intake">Intake</button>
+    <button class="tab" role="tab" aria-selected="false" aria-controls="audit" data-view="audit">Audit</button>
+    <button class="tab" role="tab" aria-selected="false" aria-controls="records" data-view="records">Records</button>
+  </nav>
+  <div class="right">
+    <span class="model" id="model" title="The model that decides each invoice"></span>
+    <div class="mode" id="mode" data-live="false"><i></i><span>Connecting…</span></div>
+    <button class="icon-btn" id="theme" aria-label="Switch between light and dark">
+      <svg class="sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      <svg class="moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+    </button>
+  </div>
+</header>
+
+<main>
+  <!-- ======== Intake ======== -->
+  <section id="intake" role="tabpanel">
+    <div class="inbox-head"><h1>Accounts payable inbox</h1><span class="muted" id="inbox-count"></span></div>
+    <div class="inbox" id="inbox"></div>
+
+    <div class="desk">
+      <div class="sheet">
+        <div class="sheet-head">
+          <p class="caption" id="caption"></p>
+          <div class="seg" role="tablist" aria-label="Show the invoice as">
+            <button role="tab" aria-selected="true" data-show="doc">Document</button>
+            <button role="tab" aria-selected="false" data-show="json">JSON</button>
+          </div>
+        </div>
+        <article class="paper" id="paper" aria-live="polite"></article>
+        <div class="json" id="json" hidden>
+          <div class="json-bar"><span class="muted">Everything the agent received, checked and returned for this invoice</span>
+            <span class="json-actions"><button class="btn small" id="copy-json">Copy</button><button class="btn small" id="dl-json">Download .json</button></span></div>
+          <pre id="json-pre"></pre>
+        </div>
+        <p class="legend" id="legend" aria-label="Legend">
+          <span><b style="color:var(--blue)">✓</b>agrees with the PO or vendor master</span>
+          <span><b style="color:var(--ochre)">Δ</b>variance to correct</span>
+          <span><b style="color:var(--red)">⊘</b>control failed</span>
+        </p>
+      </div>
+      <aside class="rail" aria-label="Agent run">
+        <div class="rail-head"><h2>Agent run</h2><span class="clock" id="clock"></span></div>
+        <div class="steps-wrap" id="steps-wrap"><div class="fill"></div><ol class="steps" id="steps"></ol></div>
+        <div id="verdict"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ======== Audit ======== -->
+  <section id="audit" role="tabpanel" hidden>
+    <div class="hero">
+      <div>
+        <p class="h-label">Loss prevented in the last 30 days</p>
+        <p class="big" id="big">€0</p>
+        <p class="h-sub">Duplicate payments and suspected bank-detail fraud, stopped before any money left the account.</p>
+        <p class="delta" id="delta" hidden></p>
+      </div>
+      <figure class="chart" id="chart" style="margin:0">
+        <figcaption><span>Invoices per day</span><span class="key"><span style="--k:var(--ink-3)">Approved</span><span style="--k:var(--ochre)">Exceptions</span></span></figcaption>
+        <div id="series"></div>
+      </figure>
+    </div>
+    <dl class="stats" id="stats"></dl>
+
+    <div class="block">
+      <h2>Waiting for a person</h2>
+      <p class="lede">Invoices the agent would not release on its own. Payment terms keep running while they wait.</p>
+      <div class="scroll" id="queue"></div>
+    </div>
+
+    <div class="two block">
+      <div><h2>Why invoices were stopped</h2><p class="lede">Failed controls, all invoices.</p><div class="bars" id="reasons"></div></div>
+      <div><h2>Spend by vendor</h2><p class="lede">Share of invoices flagged in brackets.</p><div class="bars" id="vendors"></div></div>
+    </div>
+
+    <div class="block" id="log-block">
+      <h2>Audit log</h2>
+      <p class="lede">Every decision with the agent's reasoning and any human override. Select a row to read it, or a bar above to filter.</p>
+      <div class="toolbar">
+        <input id="q" type="search" placeholder="Search invoice, vendor, IBAN or reason" aria-label="Search the audit log">
+        <select id="st" aria-label="Filter by outcome">
+          <option value="">All outcomes</option><option value="approved">Approved</option><option value="on_hold">On hold</option>
+          <option value="escalated">Stopped</option><option value="rejected">Rejected</option>
+        </select>
+        <select id="fv" aria-label="Filter by vendor"><option value="">All vendors</option></select>
+        <select id="fc" aria-label="Filter by failed control"><option value="">Any control</option></select>
+        <button class="btn" id="csv">Export CSV</button>
+      </div>
+      <div class="count" id="count"></div>
+      <div class="scroll" id="log"></div>
+    </div>
+
+    <div class="foot">
+      <span>Figures include the seeded history plus every invoice processed in this session.</span>
+      <button class="btn small" id="reset">Reset demo data</button>
+    </div>
+  </section>
+
+  <!-- ======== Records ======== -->
+  <section id="records" role="tabpanel" hidden>
+    <div class="rec-head">
+      <div><h1 class="page-title">Records</h1>
+        <p class="lede">The master data every control checks against. The agent only pays vendors, bank accounts and orders listed here.</p></div>
+      <input type="search" id="rq" placeholder="Search vendor, IBAN, PO or item" aria-label="Search records">
+    </div>
+    <div class="block"><h2>Vendor master</h2><p class="lede" id="vendors-n"></p><div class="scroll" id="vendors-t"></div></div>
+    <div class="block"><h2>Purchase orders</h2><p class="lede" id="pos-n"></p><div class="scroll" id="pos-t"></div></div>
+  </section>
+</main>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const eur = n => new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(n || 0);
+const eur0 = n => new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
+const day = iso => iso ? new Date(iso.length === 10 ? iso + "T12:00:00" : iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+const groups = s => String(s || "").replace(/\s/g, "").replace(/(.{4})(?=.)/g, "$1 ");
+const reduced = matchMedia("(prefers-reduced-motion: reduce)");
+const wait = ms => new Promise(r => setTimeout(r, reduced.matches ? 0 : ms));
+const qty = n => Number.isInteger(n) ? n : n.toFixed(2);
+
+// The eight controls the agent runs; each maps to the flag codes that fail it.
+const CONTROLS = [
+  ["Vendor in vendor master", ["unknown_vendor"]], ["Bank details match master", ["bank_change"]],
+  ["Not already processed", ["duplicate"]], ["Valid PO for this vendor", ["no_po", "unknown_po", "po_vendor_mismatch"]],
+  ["Every item on the PO", ["unordered_item"]], ["Prices within 2% of PO", ["price_variance"]],
+  ["Quantities within PO", ["qty_over"]], ["Total equals the lines", ["total_mismatch"]],
+];
+const SHORT = {
+  duplicate: "Duplicate invoice", bank_change: "Bank details changed", unknown_vendor: "Unknown vendor",
+  po_vendor_mismatch: "PO issued to another vendor", no_po: "No purchase order", unknown_po: "PO not found",
+  price_variance: "Price above PO", qty_over: "Quantity above PO", unordered_item: "Item not on PO", total_mismatch: "Total doesn't add up",
+};
+const STATUS = { approved: "Approved", on_hold: "On hold", escalated: "Stopped", rejected: "Rejected" };
+const TILE = { approved: "Approved", on_hold: "Held", escalated: "Stopped", rejected: "Rejected" };
+const failedControls = flags => CONTROLS.filter(([, codes]) => flags.some(f => codes.includes(f.code))).length;
+
+const S = { samples: [], outcome: {}, busy: false, model: "Open model on AMD", live: {}, ledger: [], prevBig: 0, grown: false, entry: null, reviewer: "" };
+try { S.reviewer = localStorage.getItem("lh-reviewer") || ""; } catch {}
+const paper = $("#paper");
+
+// ---------- stamp wording follows real AP practice ----------
+function stampFor(e) {
+  const codes = new Set(e.flags.map(f => f.code));
+  if (e.reviewed_by) return e.status === "approved" ? { cls: "s-approve", head: "Released for payment" } : { cls: "s-stop", head: "Rejected by reviewer" };
+  if (e.status === "approved") return { cls: "s-approve", head: "Approved for payment" };
+  if (e.status === "on_hold") return { cls: "s-hold", head: codes.has("no_po") || codes.has("unknown_po") ? "Hold: PO required" : "Hold: query vendor" };
+  if (e.status === "escalated") return { cls: "s-stop", head: codes.has("bank_change") ? "Stop: verify bank details" : "Stop: controller review" };
+  return codes.has("duplicate") ? { cls: "s-dup", head: "Duplicate: do not pay" } : { cls: "s-stop", head: "Rejected" };
+}
+const statusClass = e => `c-${e.status}`;
+const chip = e => `<span class="chip ${statusClass(e)}">${esc(stampFor(e).head)}</span>`;
+
+// ---------- tabs ----------
+function show(view) {
+  $$(".tab").forEach(x => x.setAttribute("aria-selected", x.dataset.view === view));
+  $$('main > [role="tabpanel"]').forEach(p => p.hidden = p.id !== view);
+  if (view === "audit") return loadAudit();
+  if (view === "records") return loadRecords();
+}
+
+// Jump from anywhere to the audit log, pre-filtered.
+async function auditFor({ vendor = "", code = "" }) {
+  if ($("#audit").hidden) await show("audit");
+  $("#fv").value = vendor;
+  $("#fc").value = code;
+  renderLog();
+  $("#log-block").scrollIntoView({ behavior: reduced.matches ? "auto" : "smooth", block: "start" });
+}
+$$(".tab").forEach(t => t.onclick = () => show(t.dataset.view));
+
+$("#theme").onclick = () => {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem("lh-theme", next); } catch {}
+};
+
+// "/" jumps to the search box of the view you're on, like most lookup tools.
+document.addEventListener("keydown", ev => {
+  if (ev.key !== "/" || ev.target.closest?.("input, textarea, select")) return;
+  const box = $('main > [role="tabpanel"]:not([hidden]) input[type="search"]');
+  if (box) { ev.preventDefault(); box.focus(); box.select(); }
+});
+
+// ---------- boot ----------
+async function init() {
+  const st = await (await fetch("/api/status")).json();
+  S.live = st.live;
+  S.model = st.model.split("·")[0].trim();
+  S.hardware = (st.model.split("·")[1] || "AMD Instinct MI300X").trim();
+  $("#model").textContent = `${S.model} on ${S.hardware.replace(/^vLLM on /, "")}`;
+  const allLive = Object.values(st.live).every(Boolean);
+  const m = $("#mode");
+  m.dataset.live = allLive;
+  m.querySelector("span").textContent = allLive ? "Live" : "Simulation";
+  m.title = Object.entries(st.live).map(([k, v]) => `${k.replace("_", " ")}: ${v ? "live" : "simulated"}`).join("\n");
+  S.samples = await (await fetch("/api/samples")).json();
+  buildInbox();
+  paperEmpty();
+  railReset();
+}
+
+// ---------- inbox (built once; runs only toggle state) ----------
+function buildInbox() {
+  $("#inbox").innerHTML = S.samples.map(s => `
+    <button class="tile" data-id="${s.id}" aria-current="false">
+      <span class="t-from">${esc(s.from.split("@")[1])}</span>
+      <span class="t-subj">${esc(s.subject)}</span>
+      <span class="t-file">${esc(s.file)}</span>
+      <span class="t-out" hidden></span>
+    </button>`).join("") + `
+    <label class="tile drop" id="drop"><span><b>Drop a PDF invoice</b><br>or choose a file</span><input type="file" id="file" accept="application/pdf,.pdf" class="sr"></label>`;
+  $$(".tile[data-id]").forEach(t => t.onclick = () => runSample(t));
+  const drop = $("#drop");
+  $("#file").onchange = e => upload(e.target.files[0]);
+  drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+  drop.ondragleave = () => drop.classList.remove("over");
+  drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); upload(e.dataTransfer.files[0]); };
+  updateInbox();
+}
+
+function updateInbox(activeId) {
+  const left = S.samples.filter(s => !S.outcome[s.id]).length;
+  $("#inbox-count").textContent = left ? `${left} waiting` : "All processed";
+  $$(".tile[data-id]").forEach(t => {
+    if (activeId !== undefined) t.setAttribute("aria-current", t.dataset.id === activeId);
+    t.setAttribute("aria-disabled", S.busy);
+    t.title = S.busy ? "The agent is working on another invoice" : "";
+    const e = S.outcome[t.dataset.id], out = $(".t-out", t);
+    out.hidden = !e;
+    if (e) { out.textContent = TILE[e.status]; out.className = `t-out ${statusClass(e)}`; }
+  });
+}
+
+async function runSample(tile) {
+  if (S.busy) return;
+  const s = S.samples.find(x => x.id === tile.dataset.id);
+  const blob = await (await fetch(`/api/samples/${s.id}.pdf`)).blob();
+  const e = await run(new File([blob], s.file, { type: "application/pdf" }), `${s.subject}\n\n${s.body}`, tile, `/api/samples/${s.id}.pdf`);
+  if (e) { S.outcome[s.id] = e; updateInbox(); }
+}
+
+function upload(f) {
+  if (!f || S.busy) return;
+  run(f, "", null, URL.createObjectURL(f));
+}
+
+// ---------- one run: stream NDJSON events, animate each as it arrives ----------
+async function run(file, email, tile, href) {
+  S.busy = true;
+  S.entry = null;
+  S.run = { source: { file: file.name, email_subject: email.split("\n")[0] || null }, steps: {} };
+  updateInbox(tile ? tile.dataset.id : "");
+  let swapped = false;
+  const swap = () => { if (swapped) return; swapped = true; railReset(); paperReading(file.name, href); };
+  if (tile && document.startViewTransition && !reduced.matches) {
+    const chipEl = $(".t-file", tile);
+    chipEl.style.viewTransitionName = "doc";
+    const vt = document.startViewTransition(() => { chipEl.style.viewTransitionName = ""; paper.style.viewTransitionName = "doc"; swap(); });
+    vt.finished.catch(() => {}).finally(() => { chipEl.style.viewTransitionName = ""; paper.style.viewTransitionName = ""; });
+    // Never let the flourish block the run: if the browser isn't painting, skip it.
+    await Promise.race([vt.updateCallbackDone.catch(() => {}), wait(300)]);
+    if (!swapped) { vt.skipTransition(); swap(); }
+  } else swap();
+
+  const t0 = performance.now();
+  let raf;
+  const tick = () => {
+    $("#clock").textContent = `${((performance.now() - t0) / 1000).toFixed(1)} s`;
+    const live = $('.step[data-state="run"]');
+    if (live) $(".t", live).textContent = `${((performance.now() - live._t0) / 1000).toFixed(1)} s`;
+    raf = requestAnimationFrame(tick);
+  };
+  tick();
+
+  let chain = Promise.resolve();
+  try {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("email", email);
+    const res = await fetch("/api/process", { method: "POST", body: fd });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `The server answered ${res.status}.`);
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const ev = JSON.parse(buf.slice(0, i));
+        buf = buf.slice(i + 1);
+        chain = chain.then(() => handle(ev));
+      }
+    }
+    await chain;
+  } catch (err) {
+    await chain.catch(() => {});
+    $("#verdict").innerHTML = `<div class="verdict c-escalated"><p class="v-head">The run stopped</p><p class="v-sub">${esc(err.message)} Check that the server is running, then choose the invoice again.</p></div>`;
+  }
+  cancelAnimationFrame(raf);
+  S.busy = false;
+  updateInbox();
+  return S.entry;
+}
+
+let doc = {};
+async function handle(ev) {
+  if (ev.step === "result") S.run.entry = ev.entry;
+  else if (ev.status === "done") S.run.steps[ev.step] = { mode: ev.mode, ms: ev.ms, data: ev.data };
+  if (!$("#json").hidden) renderJSON();
+  if (ev.step === "result") {
+    S.entry = ev.entry;
+    stamp(ev.entry);
+    renderVerdict(ev.entry);
+    return;
+  }
+  railStep(ev);
+  if (ev.status !== "done") return;
+  if (ev.step === "extract") { doc = ev.data; paperBuild(ev.data); await wait(450); }
+  if (ev.step === "match") await paperAnnotate(ev.data);
+}
+
+// ---------- JSON view: the same run, as data ----------
+function runRecord() {
+  if (!S.run) return null;
+  const s = S.run.steps, ctl = s.match?.data;
+  return {
+    source: S.run.source,
+    extracted: s.extract ? { by: "Evolus document extractor", mode: s.extract.mode, ms: s.extract.ms, ...s.extract.data } : null,
+    controls: ctl ? { passed: 8 - failedControls(ctl.flags), of: 8, failed: ctl.flags, purchase_order: ctl.po, vendor_master: ctl.master } : null,
+    decision: s.reason ? { by: `${S.model} on ${S.hardware}, via an Evolus agent`, mode: s.reason.mode, ms: s.reason.ms, ...s.reason.data } : null,
+    vendor_email: s.draft?.data.email ?? null,
+    workflow: s.act ? { mode: s.act.mode, ...s.act.data } : null,
+    ledger_entry: S.run.entry || null,
+  };
+}
+
+const hl = obj => esc(JSON.stringify(obj, null, 2)).replace(
+  /(&quot;(?:[^&]|&(?!quot;))*?&quot;)(\s*:)?|\b(true|false|null)\b|-?\b\d+(?:\.\d+)?\b/g,
+  (m, str, colon, lit) => str ? (colon ? `<span class="jk">${str}</span>${colon}` : str) : `<span class="${lit ? "jl" : "jn"}">${m}</span>`);
+
+function renderJSON() {
+  const rec = runRecord();
+  $("#json-pre").innerHTML = rec ? hl(rec) : '<span class="muted">Choose an invoice from the inbox. Its data appears here as the agent works.</span>';
+  $("#copy-json").disabled = $("#dl-json").disabled = !rec;
+}
+
+$$(".seg button").forEach(b => b.onclick = () => {
+  const json = b.dataset.show === "json";
+  $$(".seg button").forEach(x => x.setAttribute("aria-selected", x === b));
+  paper.hidden = json;
+  $("#legend").hidden = json;
+  $("#json").hidden = !json;
+  if (json) renderJSON();
+});
+$("#copy-json").onclick = async ev => {
+  try { await navigator.clipboard.writeText(JSON.stringify(runRecord(), null, 2)); ev.target.textContent = "Copied"; }
+  catch { ev.target.textContent = "Copy blocked by the browser"; }
+  setTimeout(() => { ev.target.textContent = "Copy"; }, 1600);
+};
+$("#dl-json").onclick = () => {
+  const rec = runRecord();
+  Object.assign(document.createElement("a"), {
+    href: URL.createObjectURL(new Blob([JSON.stringify(rec, null, 2)], { type: "application/json" })),
+    download: `${rec.ledger_entry?.number || rec.extracted?.number || "ledgerhawk-run"}.json`,
+  }).click();
+};
+
+// ---------- the paper ----------
+function paperEmpty() {
+  paper.dataset.state = "empty";
+  delete paper.dataset.read; delete paper.dataset.checked;
+  $("#caption").textContent = "";
+  paper.innerHTML = `<div class="band" aria-hidden="true"></div>
+    <div class="empty"><p>Choose an invoice from the inbox</p>
+    <p>The agent reads it, checks every line against the purchase order and the vendor master, and stamps a decision you can audit.</p></div>`;
+}
+
+function paperReading(name, href) {
+  paper.dataset.state = "reading";
+  delete paper.dataset.read; delete paper.dataset.checked;
+  $("#caption").innerHTML = `Reading <a href="${esc(href)}" target="_blank" rel="noopener">${esc(name)}</a> with the Evolus document extractor`;
+  paper.innerHTML = `<div class="band" aria-hidden="true"></div><div class="ghost" aria-label="Reading the invoice">
+    ${[46, 30, 62, 54, 58, 0, 92, 88, 70].map(w => w ? `<i style="width:${w}%"></i>` : "<br>").join("")}</div>`;
+}
+
+function paperBuild(inv) {
+  paper.dataset.state = "read";
+  $("#caption").innerHTML = $("#caption").innerHTML.replace("Reading", "As read from").replace("with the Evolus", "by the Evolus");
+  const lines = inv.lines.length ? inv.lines.map((l, i) => `
+    <div class="row line" data-line="${i}">
+      <div class="c"><span><span class="fv" style="--i:${6 + i}">${esc(l.desc)}</span></span><span class="num">${qty(l.qty)}</span>
+        <span class="num">${eur(l.price)}</span><span class="num"><span class="fv" style="--i:${6 + i}">${eur(l.qty * l.price)}</span></span></div>
+      <div class="note" data-note="line-${i}"></div>
+    </div>`).join("") : `<div class="row line"><div class="c" style="color:var(--p-ink-3)">No line items could be read</div><div class="note"></div></div>`;
+  paper.innerHTML = `
+    <div class="band" aria-hidden="true"></div>
+    <div class="row head"><div class="c"><p class="vendor fv" style="--i:0">${esc(inv.vendor) || "Unreadable vendor"}</p><p class="doc-title">Invoice</p></div><div class="note" data-note="vendor"></div></div>
+    <div class="row kv"><div class="c"><span class="k">Invoice number</span><span class="v mono"><span class="fv" data-f="number" style="--i:1">${esc(inv.number) || "—"}</span></span></div><div class="note" data-note="number"></div></div>
+    <div class="row kv"><div class="c"><span class="k">Invoice date</span><span class="v"><span class="fv" style="--i:2">${day(inv.date) || "—"}</span></span></div><div class="note"></div></div>
+    <div class="row kv"><div class="c"><span class="k">Purchase order</span><span class="v mono"><span class="fv" data-f="po" style="--i:3">${esc(inv.po) || "None quoted"}</span></span></div><div class="note" data-note="po"></div></div>
+    <div class="row kv"><div class="c"><span class="k">Pay to IBAN</span><span class="v mono"><span class="fv" data-f="iban" style="--i:4">${esc(groups(inv.iban)) || "—"}</span></span></div><div class="note" data-note="iban"></div></div>
+    <div class="row lines-h"><div class="c"><span>Item</span><span class="num">Qty</span><span class="num">Unit price</span><span class="num">Amount</span></div><div></div></div>
+    ${lines}
+    <div class="row total"><div class="c"><span class="k">Total due</span><span><span class="fv" data-f="total" style="--i:9">${eur(inv.total)}</span></span></div><div class="note" data-note="total"></div></div>`;
+  requestAnimationFrame(() => requestAnimationFrame(() => { paper.dataset.read = ""; }));
+}
+
+const INK = '<svg viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M1 6 C 22 2, 48 9, 70 5 S 92 3, 99 6"/></svg>';
+
+function ibanDiff(inv, master) {
+  const a = inv.replace(/\s/g, ""), b = master.replace(/\s/g, "");
+  const mark = (s, o) => [...s].map((ch, i) => (ch !== o[i] ? `<span class="dc">${esc(ch)}</span>` : esc(ch)) + ((i + 1) % 4 === 0 && i + 1 < s.length ? " " : "")).join("");
+  return { inv: mark(a, b), master: mark(b, a) };
+}
+
+async function paperAnnotate({ flags, po, master }) {
+  const by = {};
+  flags.forEach(f => {
+    const key = f.field === "line" ? `line-${f.line}` : f.field;
+    (by[key] ||= []).push(f);
+  });
+  const notes = $$("[data-note]", paper);
+  notes.forEach((n, j) => {
+    const key = n.dataset.note, fs = by[key] || [];
+    n.style.setProperty("--j", j);
+    const high = fs.some(f => f.severity === "high");
+    n.className = `note ${fs.length ? (high ? "fail" : "var") : "ok"}`;
+    n.innerHTML = noteText(key, fs, po, master);
+    if (!n.innerHTML) return;
+    // ink the exact value the control looked at
+    const target = key.startsWith("line-") ? $$(`[data-line="${key.slice(5)}"] .fv`, paper).pop()
+      : key === "vendor" ? $(".vendor", paper) : $(`[data-f="${key}"]`, paper);
+    if (fs.length && target) {
+      target.classList.toggle("var", !high);
+      target.style.setProperty("--j", j);
+      target.insertAdjacentHTML("beforeend", INK);
+    }
+  });
+  const bank = by.iban?.find(f => f.code === "bank_change");
+  if (bank && master) {
+    const d = ibanDiff(doc.iban, master.iban);
+    const f = $('[data-f="iban"]', paper);
+    f.innerHTML = d.inv + INK;
+    $('[data-note="iban"] .mono', paper).innerHTML = d.master;
+  }
+  requestAnimationFrame(() => { paper.dataset.checked = ""; });
+  await wait(notes.length * 70 + 520);
+}
+
+function noteText(key, fs, po, master) {
+  const f = fs[0];
+  const g = (sym, body, sub = "") => `<span class="g">${sym}</span>${body}${sub ? `<span class="sub">${sub}</span>` : ""}`;
+  if (key === "vendor") return f ? g("⊘", "Not in the vendor master") : g("✓", "Approved vendor");
+  if (key === "number") return f ? g("⊘", "Already processed", esc(f.message.replace(/^\S+ was already processed on (\S+)/, (_, d) => `On ${day(d)}`))) : g("✓", "Not paid before");
+  if (key === "po") return f ? g("⊘", esc(SHORT[f.code]), esc(f.code === "no_po" ? "Route to the requester to raise one." : f.message)) : g("✓", `Open PO, ordered by ${esc(po?.requester || "the requester")}`);
+  if (key === "iban") return f ? g("⊘", "Bank details changed", `Vendor master <span class="mono"></span>`) : master ? g("✓", "Matches the vendor master") : "";
+  if (key === "total") return f ? g("Δ", esc(f.message)) : g("✓", "Equals the sum of the lines");
+  if (key.startsWith("line-")) {
+    if (!po) return "";
+    const line = doc.lines[+key.slice(5)];
+    const ordered = po.lines.find(l => l.desc.toLowerCase() === line.desc.toLowerCase());
+    if (!fs.length) return g("✓", `Agrees to ${esc(doc.po)}`);
+    return fs.map(x => x.code === "unordered_item" ? g("⊘", `Not on ${esc(doc.po)}`)
+      : x.code === "price_variance" ? g("Δ", `${eur(x.amount)} over the PO`, `PO price ${eur(ordered.price)}, invoiced ${eur(line.price)}`)
+      : g("Δ", `${qty(line.qty - ordered.qty)} more than ordered`, `PO quantity ${ordered.qty}`)).join("<br>");
+  }
+  return "";
+}
+
+function stampEl(e, second) {
+  const s = stampFor(e);
+  const el = document.createElement("div");
+  el.className = `stamp ${s.cls}${second ? " second" : ""}`;
+  el.setAttribute("role", "img");
+  el.setAttribute("aria-label", `Stamped: ${s.head}`);
+  el.innerHTML = `<p class="s-head">${esc(s.head)}</p>
+    <dl class="s-f"><dt>Checked</dt><dd>${8 - failedControls(e.flags)} of 8 controls passed</dd>
+    <dt>PO</dt><dd>${esc(e.po) || "None"}</dd>
+    <dt>By</dt><dd>${esc(e.reviewed_by || `Agent, ${S.model}`)}</dd>
+    <dt>Date</dt><dd>${day(e.reviewed_at || e.processed_at)}</dd></dl>`;
+  return el;
+}
+
+function stamp(e) {
+  const old = $(".stamp:not(.void)", paper);
+  if (old) {
+    old.classList.add("void");
+    old.insertAdjacentHTML("beforeend", '<svg class="strike" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><line pathLength="1" x1="2" y1="94" x2="98" y2="6"/></svg>');
+  }
+  const el = stampEl(e, !!old);
+  paper.append(el);
+  el.addEventListener("animationend", () => {
+    paper.classList.remove("thud");
+    void paper.offsetWidth;
+    paper.classList.add("thud");
+  }, { once: true });
+}
+
+// ---------- the rail ----------
+function railReset() {
+  const steps = [
+    ["extract", "Read the invoice", "Evolus document extractor"],
+    ["match", "Check against PO and vendor master", "Deterministic controls, every invoice"],
+    ["reason", "Decide", `${S.model} on ${S.hardware}, via an Evolus agent`],
+    ["draft", "Write to the vendor", "Evolus AI Tool (email)"],
+    ["act", "Hand off", "Evolus workflow"],
+  ];
+  $("#steps").innerHTML = steps.map(([id, title, eng]) => `
+    <li class="step" data-step="${id}" data-state="idle">
+      <span class="node" aria-hidden="true"></span>
+      <div><div class="s-title">${title}</div><div class="s-eng">${esc(eng)}</div>
+      <div class="s-meta"><span class="t"></span><span class="m"></span></div><div class="s-out"></div></div>
+    </li>`).join("");
+  $("#steps-wrap").style.setProperty("--progress", 0);
+  $("#verdict").innerHTML = "";
+  $("#clock").textContent = "";
+}
+
+function railStep(ev) {
+  const li = $(`.step[data-step="${ev.step}"]`);
+  li.dataset.state = { running: "run", skipped: "skip", done: "done" }[ev.status];
+  if (ev.status === "running") li._t0 = performance.now();
+  if (ev.status === "skipped") $(".s-out", li).textContent = "Nothing for the vendor to correct.";
+  if (ev.status === "done") {
+    $(".node", li).textContent = "✓";
+    $(".t", li).textContent = `${(ev.ms / 1000).toFixed(1)} s`;
+    const m = $(".m", li), mode = ev.mode || "";
+    m.className = `m ${mode === "live" ? "m-live" : mode.startsWith("fallback") ? "m-fallback" : ""}`;
+    m.textContent = mode === "local" ? "" : mode.startsWith("fallback") ? "fell back to simulation" : mode;
+    m.title = mode;
+    $(".s-out", li).innerHTML = OUT[ev.step](ev.data);
+  }
+  const settled = $$('.step[data-state="done"], .step[data-state="skip"]').length;
+  $("#steps-wrap").style.setProperty("--progress", settled / 5);
+}
+
+const OUT = {
+  extract: d => `${d.lines.length} line${d.lines.length === 1 ? "" : "s"} and 6 header fields read`,
+  match: d => {
+    const failed = CONTROLS.filter(([, codes]) => d.flags.some(f => codes.includes(f.code)));
+    return `${8 - failed.length} of 8 controls passed${failed.length ? `<ul>${failed.map(([label]) => `<li>${label}: failed</li>`).join("")}</ul>` : ""}`;
+  },
+  reason: d => `<blockquote>${esc(d.rationale)}</blockquote>${d.guard ? `<div class="guard">${esc(d.guard)}</div>` : ""}`,
+  draft: d => `<pre>${esc(d.email)}</pre>`,
+  act: d => `Started the ${d.workflow === "post-to-erp" ? "post to ERP" : "human review"} workflow <span class="mono muted">${esc(String(d.executionId || "").slice(0, 8))}</span>`,
+};
+
+function verdictCopy(e) {
+  const codes = new Set(e.flags.map(f => f.code));
+  if (e.reviewed_by) return e.status === "approved"
+    ? [`Released for payment by ${e.reviewed_by}`, e.review_reason ? `Reason: ${e.review_reason}` : "No reason recorded."]
+    : [`Rejected by ${e.reviewed_by}`, e.review_reason ? `Reason: ${e.review_reason}` : "No reason recorded."];
+  return {
+    approved: ["Posted to the ERP for payment", `Due ${day(e.due) || "on terms"}. No person needed to touch it.`],
+    on_hold: [codes.has("no_po") ? "Held until a PO is raised" : "Held until the vendor corrects it", "The agent drafted the request. Release it yourself if you have checked it."],
+    escalated: ["Payment stopped", "Call the vendor on the number in the vendor master before releasing it. Never use a number from the email."],
+    rejected: ["Rejected as a duplicate", "This invoice was already processed. Paying it again would double-pay the vendor."],
+  }[e.status];
+}
+
+function renderVerdict(e) {
+  const [head, sub] = verdictCopy(e);
+  const box = document.createElement("div");
+  box.className = `verdict ${statusClass(e)}`;
+  box.innerHTML = `<p class="v-head">${esc(head)}</p><p class="v-sub">${esc(sub)}</p>`;
+  if (["on_hold", "escalated"].includes(e.status)) box.append(reviewForm(e, done => {
+    S.entry = done;
+    stamp(done);
+    renderVerdict(done);
+    const sid = S.samples.find(s => s.file === `${done.number}.pdf`)?.id;
+    if (sid && S.outcome[sid]) { S.outcome[sid] = done; updateInbox(); }
+  }));
+  $("#verdict").replaceChildren(box);
+}
+
+// ---------- human review: identity, reason and call-back are part of the control ----------
+function reviewForm(e, onDone) {
+  const stopped = e.status === "escalated";
+  const f = document.createElement("form");
+  f.className = "review";
+  f.noValidate = true;
+  f.innerHTML = `
+    <p class="r-title">Your review</p>
+    <label class="fld"><span>Reviewer</span><input name="reviewer" autocomplete="name" placeholder="Your name" value="${esc(S.reviewer)}"></label>
+    <label class="fld"><span>${stopped ? "Reason" : "Reason, optional"}</span>
+      <textarea name="why" rows="2" placeholder="${stopped ? "Who did you call, and what did they confirm?" : "What did you check?"}"></textarea></label>
+    ${stopped ? `<label class="chk"><input type="checkbox" name="verified"><span>I called ${esc(e.vendor)} on the number in the vendor master and they confirmed the new bank details.</span></label>` : ""}
+    <div class="r-actions"><button class="btn primary" value="approve">Release for payment</button><button class="btn" value="reject">Reject invoice</button></div>
+    <p class="r-err" role="alert"></p>`;
+  const [rel, rej] = $$("button", f), err = $(".r-err", f);
+  const name = () => f.elements.reviewer.value.trim(), why = () => f.elements.why.value.trim();
+  const sync = () => {
+    rel.disabled = !name() || (stopped && !(why() && f.elements.verified.checked));
+    rej.disabled = !name();
+  };
+  f.addEventListener("input", sync);
+  sync();
+  f.addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const action = ev.submitter?.value;
+    S.reviewer = name();
+    try { localStorage.setItem("lh-reviewer", S.reviewer); } catch {}
+    rel.disabled = rej.disabled = true;
+    const res = await fetch(`/api/ledger/${e.id}/review`, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, reviewer: S.reviewer, reason: why(), verified: !!f.elements.verified?.checked }) });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) { err.textContent = body.detail || "The review could not be saved. Try again."; sync(); return; }
+    onDone(body);
+  });
+  return f;
+}
+
+// ---------- audit ----------
+async function loadAudit() {
+  const [a, l] = await Promise.all([fetch("/api/analytics").then(r => r.json()), fetch("/api/ledger").then(r => r.json())]);
+  S.ledger = l;
+  countUp($("#big"), S.prevBig, a.loss_prevented);
+  S.prevBig = a.loss_prevented;
+  const delta = $("#delta");
+  delta.hidden = !a.loss_prevented_session;
+  delta.textContent = `${eur0(a.loss_prevented_session)} of it caught in this session`;
+
+  $("#stats").innerHTML = [
+    ["Held for correction", eur0(a.held_for_correction), "not lost, just waiting"],
+    ["Touchless", `${Math.round(a.touchless_rate * 100)}%`, "of invoices"],
+    ["Time saved", a.hours_saved, `hours at ${a.manual_minutes} min each`],
+    ["Open reviews", a.open_reviews, a.open_reviews === 1 ? "invoice" : "invoices"],
+  ].map(([k, v, u]) => `<div><dt>${k}</dt><dd>${v}<small>${u}</small></dd></div>`).join("");
+
+  const W = 640, H = 200, n = a.series.length, bw = W / n, max = Math.max(1, ...a.series.map(d => d.approved + d.exceptions));
+  const y = v => v / max * (H - 26);
+  $("#series").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Invoices per day over the last 30 days">
+    ${a.series.map((d, i) => {
+      const x = i * bw + 2, ha = y(d.approved), he = y(d.exceptions);
+      return `<g><title>${day(d.day)}: ${d.approved} approved, ${d.exceptions} exceptions</title>
+        <rect style="--n:${i}" x="${x}" y="${H - 22 - ha}" width="${bw - 4}" height="${ha}" rx="1.5" fill="var(--ink-3)"/>
+        <rect style="--n:${i}" x="${x}" y="${H - 22 - ha - he - (he ? 2 : 0)}" width="${bw - 4}" height="${he}" rx="1.5" fill="var(--ochre)"/></g>`;
+    }).join("")}
+    ${[0, Math.floor(n / 2), n - 1].map(i => `<text x="${i * bw + bw / 2}" y="${H - 4}" font-size="12" fill="var(--ink-3)" text-anchor="${i === 0 ? "start" : i === n - 1 ? "end" : "middle"}">${day(a.series[i].day).replace(/ \d{4}$/, "")}</text>`).join("")}
+  </svg>`;
+  if (!S.grown) { $("#chart").classList.add("grow"); S.grown = true; } else $("#chart").classList.remove("grow");
+
+  const fmax = Math.max(1, ...a.by_flag.map(f => f.count));
+  $("#reasons").innerHTML = a.by_flag.map(f => `<button class="bar-row" data-code="${f.code}" title="Show these invoices in the audit log"><span>${esc(SHORT[f.code] || f.label)}</span><span class="n">${f.count}</span>
+    <span class="track"><i style="width:${f.count / fmax * 100}%;--k:var(--ochre)"></i></span></button>`).join("");
+  const vmax = Math.max(1, ...a.by_vendor.map(v => v.spend));
+  $("#vendors").innerHTML = a.by_vendor.map(v => `<button class="bar-row" data-vendor="${esc(v.vendor)}" title="Show this vendor's invoices"><span>${esc(v.vendor)} <span class="muted">(${Math.round(v.flagged / v.count * 100)}%)</span></span>
+    <span class="n">${eur0(v.spend)}</span><span class="track"><i style="width:${v.spend / vmax * 100}%"></i></span></button>`).join("");
+  $$("#reasons [data-code]").forEach(b => b.onclick = () => auditFor({ code: b.dataset.code }));
+  $$("#vendors [data-vendor]").forEach(b => b.onclick = () => auditFor({ vendor: b.dataset.vendor }));
+
+  // Filter options come from the data, and keep whatever was already chosen.
+  const fill = (sel, first, opts) => { const v = sel.value; sel.innerHTML = `<option value="">${first}</option>` + opts.map(([val, label]) => `<option value="${esc(val)}">${esc(label)}</option>`).join(""); sel.value = v; };
+  fill($("#fv"), "All vendors", [...new Set(S.ledger.map(e => e.vendor))].sort().map(v => [v, v]));
+  fill($("#fc"), "Any control", Object.keys(SHORT).filter(c => S.ledger.some(e => e.flags.some(f => f.code === c))).map(c => [c, SHORT[c]]));
+
+  renderQueue();
+  renderLog();
+}
+
+function countUp(el, from, to) {
+  if (reduced.matches || from === to) { el.textContent = eur0(to); return; }
+  const t0 = performance.now(), dur = 900;
+  const step = now => {
+    const p = Math.min(1, (now - t0) / dur), k = 1 - Math.pow(1 - p, 3);
+    el.textContent = eur0(from + (to - from) * k);
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+function renderQueue() {
+  const q = S.ledger.filter(e => e.status === "on_hold" || e.status === "escalated");
+  const today = new Date();
+  $("#queue").innerHTML = q.length ? `<table><thead><tr><th>Invoice</th><th>Vendor</th><th>Why it stopped</th><th>Waiting</th><th>Due</th><th class="num">Amount</th><th></th></tr></thead><tbody>
+    ${q.map(e => {
+      const waited = Math.max(0, Math.round((today - new Date(e.processed_at)) / 864e5));
+      const late = e.due && new Date(e.due + "T23:59:59") < today;
+      return `<tr data-id="${e.id}"><td><span class="mono">${esc(e.number)}</span><br>${chip(e)}</td><td>${esc(e.vendor)}</td>
+        <td>${esc(e.flags.map(f => f.message).join("; "))}</td><td>${waited ? `${waited} d` : "Today"}</td>
+        <td class="${late ? "late" : ""}">${day(e.due)}${late ? "<br>overdue" : ""}</td><td class="num">${eur(e.total)}</td>
+        <td><button class="btn small" data-review="${e.id}">Review</button></td></tr>`;
+    }).join("")}</tbody></table>` : `<p class="muted">Nothing waiting. Every invoice has a decision.</p>`;
+  $$("[data-review]", $("#queue")).forEach(b => b.onclick = () => {
+    const tr = b.closest("tr"), open = tr.nextElementSibling?.classList.contains("why");
+    $$("tr.why", $("#queue")).forEach(x => x.remove());
+    if (open) return;
+    const e = S.ledger.find(x => x.id === b.dataset.review);
+    const row = document.createElement("tr");
+    row.className = "why";
+    row.innerHTML = `<td colspan="7"></td>`;
+    row.firstChild.append(reviewForm(e, () => loadAudit()));
+    tr.after(row);
+    $("input", row).focus();
+  });
+}
+
+function filtered() {
+  const q = $("#q").value.trim().toLowerCase(), st = $("#st").value, fv = $("#fv").value, fc = $("#fc").value;
+  return S.ledger.filter(e => (!st || e.status === st) && (!fv || e.vendor === fv) && (!fc || e.flags.some(f => f.code === fc)) &&
+    (!q || [e.number, e.vendor, e.po, e.iban, e.rationale, e.reviewed_by, e.review_reason, ...e.flags.map(f => f.message)].join(" ").toLowerCase().includes(q)));
+}
+
+function renderLog() {
+  const all = filtered(), rows = all.slice(0, 200);
+  const active = $("#q").value || $("#st").value || $("#fv").value || $("#fc").value;
+  $("#count").innerHTML = `<span>Showing ${all.length} of ${S.ledger.length} invoices${all.length > rows.length ? `, first ${rows.length} listed` : ""}</span>
+    ${active ? '<button class="linkish" id="clear">Clear filters</button>' : ""}`;
+  $("#clear")?.addEventListener("click", () => { $("#q").value = $("#st").value = $("#fv").value = $("#fc").value = ""; renderLog(); });
+  $("#log").innerHTML = rows.length ? `<table><thead><tr><th>Processed</th><th>Invoice</th><th>Vendor</th><th>Outcome</th><th>Failed controls</th><th class="num">Amount</th></tr></thead><tbody>
+    ${rows.map(e => `<tr class="log" data-id="${e.id}" tabindex="0"><td>${day(e.processed_at)}</td>
+      <td><span class="mono">${esc(e.number)}</span>${e.source === "agent" ? ' <span class="muted">this session</span>' : ""}</td>
+      <td>${esc(e.vendor)}</td><td>${chip(e)}</td><td>${esc(e.flags.map(f => SHORT[f.code]).join(", ")) || '<span class="muted">None</span>'}</td>
+      <td class="num">${eur(e.total)}</td></tr>
+      <tr class="why" hidden data-for="${e.id}"><td colspan="6"><p><b>Agent:</b> ${esc(e.rationale)}</p>
+      ${e.flags.length ? `<p><b>Evidence:</b> ${esc(e.flags.map(f => f.message).join("; "))}</p>` : ""}
+      ${e.reviewed_by ? `<p><b>Human review:</b> ${esc(STATUS[e.status])} by ${esc(e.reviewed_by)} on ${day(e.reviewed_at)}${e.review_reason ? `. ${esc(e.review_reason)}` : ""}</p>` : ""}
+      <details class="rawd"><summary>Raw record (JSON)</summary><pre class="raw">${hl(e)}</pre></details></td></tr>`).join("")}
+    </tbody></table>` : `<p class="muted">No invoices match. Clear the search or pick another outcome.</p>`;
+  $$("tr.log").forEach(tr => {
+    const toggle = () => { const w = $(`tr.why[data-for="${tr.dataset.id}"]`); w.hidden = !w.hidden; };
+    tr.onclick = toggle;
+    tr.onkeydown = ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggle(); } };
+  });
+}
+$("#q").oninput = renderLog;
+$("#st").onchange = $("#fv").onchange = $("#fc").onchange = renderLog;
+
+// ---------- records ----------
+const markQ = (text, q) => {
+  const t = esc(text);
+  if (!q) return t;
+  return t.replace(new RegExp(esc(q).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), m => `<mark>${m}</mark>`);
+};
+
+async function loadRecords() {
+  S.records = await fetch("/api/records").then(r => r.json());
+  renderRecords();
+}
+
+function renderRecords() {
+  const q = $("#rq").value.trim(), lq = q.toLowerCase().replace(/\s/g, "");
+  const hit = (...xs) => !lq || xs.join("|").toLowerCase().replace(/\s/g, "").includes(lq);
+  const { vendors, purchase_orders: pos } = S.records;
+  const vs = vendors.filter(v => hit(v.name, v.iban));
+  const ps = pos.filter(p => hit(p.id, p.vendor, p.requester, ...p.lines.map(l => l.desc)));
+  $("#vendors-n").textContent = q ? `${vs.length} of ${vendors.length} vendors match.`
+    : `${vendors.length} approved vendors. A new bank account only counts once the controller updates it here.`;
+  $("#vendors-t").innerHTML = vs.length ? `<table><thead><tr><th>Vendor</th><th>Bank account (IBAN)</th><th>Payment terms</th><th class="num">Invoices</th><th class="num">Spend</th><th></th></tr></thead><tbody>
+    ${vs.map(v => `<tr><td>${markQ(v.name, q)}</td><td class="mono">${markQ(groups(v.iban), q)}</td><td>${v.terms_days} days</td>
+      <td class="num">${v.invoices}</td><td class="num">${eur0(v.spend)}</td><td class="num"><button class="linkish" data-vendor="${esc(v.name)}">Invoices</button></td></tr>`).join("")}
+    </tbody></table>` : `<p class="muted">No vendor matches “${esc(q)}”.</p>`;
+  $("#pos-n").textContent = q ? `${ps.length} of ${pos.length} purchase orders match.` : `${pos.length} open purchase orders. Invoices are matched line by line, with 2% price tolerance.`;
+  $("#pos-t").innerHTML = ps.length ? `<table><thead><tr><th>PO</th><th>Vendor</th><th>Requester</th><th>Lines</th><th class="num">Ordered</th><th class="num">Invoiced and approved</th></tr></thead><tbody>
+    ${ps.map(p => `<tr><td class="mono">${markQ(p.id, q)}</td><td>${markQ(p.vendor, q)}</td><td>${markQ(p.requester, q)}</td>
+      <td><ul class="po-lines">${p.lines.map(l => `<li>${markQ(l.desc, q)}, ${l.qty} at ${eur(l.price)}</li>`).join("")}</ul></td>
+      <td class="num">${eur(p.ordered)}</td><td class="num">${eur(p.invoiced)}<div class="meter" style="margin-left:auto"><i style="width:${Math.min(100, p.invoiced / p.ordered * 100)}%"></i></div></td></tr>`).join("")}
+    </tbody></table>` : `<p class="muted">No purchase order matches “${esc(q)}”.</p>`;
+  $$("#vendors-t [data-vendor]").forEach(b => b.onclick = () => auditFor({ vendor: b.dataset.vendor }));
+}
+$("#rq").oninput = renderRecords;
+$("#csv").onclick = () => {
+  const cols = ["processed_at", "number", "vendor", "po", "status", "total", "exposure", "rationale", "reviewed_by", "review_reason"];
+  const cell = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const csv = [cols.concat("failed_controls").join(","), ...filtered().map(e => cols.map(c => cell(e[c])).concat(cell(e.flags.map(f => f.message).join("; "))).join(","))].join("\n");
+  Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })), download: "ledgerhawk-audit-log.csv" }).click();
+};
+$("#reset").onclick = async () => {
+  if (S.busy || !confirm("Reset the demo data? Invoices processed in this session are cleared, so the inbox can be run again.")) return;
+  await fetch("/api/reset", { method: "POST" });
+  S.outcome = {}; S.prevBig = 0; S.grown = false; S.run = null;
+  renderJSON();
+  updateInbox("");
+  paperEmpty();
+  railReset();
+  loadAudit();
+};
+
+init();
+</script>
+</body>
+</html>

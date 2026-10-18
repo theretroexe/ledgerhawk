@@ -1,0 +1,93 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+body { margin: 0; font-family: "IBM Plex Sans", sans-serif; display: grid; grid-template-columns: 1fr 1fr; }
+.c { padding: 28px 32px; display: grid; gap: 24px; align-content: start; }
+.light { background: #F4F4F2; color: #18181B; }
+.dark { background: #0E0E10; color: #EDEDEC; }
+.row { display: flex; align-items: flex-end; gap: 22px; }
+.lock { display: flex; align-items: center; gap: 12px; font: 600 30px/1 "IBM Plex Sans"; letter-spacing: -.022em; }
+.lock.sm { font-size: 17px; gap: 8px; letter-spacing: -.012em; }
+.tile { width: 72px; height: 72px; border-radius: 18px; background: #18181B; color: #F4F4F2; display: grid; place-items: center; }
+.dark .tile { background: #EDEDEC; color: #0E0E10; }
+</style></head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="M" viewBox="0 0 64 64"><path id="pM" fill="currentColor"/><circle cx="46.4" cy="27.5" r="1.1" fill="#C4203A"/></symbol>
+    <symbol id="S" viewBox="0 0 24 24"><path id="pS" fill="currentColor"/></symbol>
+  </defs>
+</svg>
+
+<div class="c light">
+  <div class="row">
+    <svg width="200" height="200"><use href="#M"/></svg>
+    <svg width="64" height="64"><use href="#M"/></svg>
+    <div class="tile"><svg width="56" height="56"><use href="#M"/></svg></div>
+  </div>
+  <div class="row">
+    <svg width="48" height="48"><use href="#S"/></svg>
+    <svg width="24" height="24"><use href="#S"/></svg>
+    <svg width="16" height="16"><use href="#S"/></svg>
+  </div>
+  <div class="lock"><svg width="48" height="48"><use href="#M"/></svg>LedgerHawk</div>
+  <div class="lock sm"><svg width="24" height="24"><use href="#S"/></svg>LedgerHawk</div>
+</div>
+<div class="c dark">
+  <div class="row">
+    <svg width="200" height="200"><use href="#M"/></svg>
+    <svg width="64" height="64"><use href="#M"/></svg>
+    <div class="tile"><svg width="56" height="56"><use href="#M"/></svg></div>
+  </div>
+  <div class="row">
+    <svg width="48" height="48"><use href="#S"/></svg>
+    <svg width="24" height="24"><use href="#S"/></svg>
+    <svg width="16" height="16"><use href="#S"/></svg>
+  </div>
+  <div class="lock"><svg width="48" height="48"><use href="#M"/></svg>LedgerHawk</div>
+  <div class="lock sm"><svg width="24" height="24"><use href="#S"/></svg>LedgerHawk</div>
+</div>
+
+<script>
+// Each stroke is a polyline of [x, y, width]; it is filled as a tapered quad per segment, so ends can come to a point.
+// One closed polygon per stroke: offset each vertex along the averaged (mitred) normal, so joints stay clean.
+const taper = pts => {
+  const seg = pts.slice(1).map((b, i) => { const a = pts[i], l = Math.hypot(b[0] - a[0], b[1] - a[1]); return [-(b[1] - a[1]) / l, (b[0] - a[0]) / l]; });
+  const off = pts.map((q, i) => {
+    const n1 = seg[Math.max(0, i - 1)], n2 = seg[Math.min(seg.length - 1, i)];
+    let nx = n1[0] + n2[0], ny = n1[1] + n2[1];
+    const l = Math.hypot(nx, ny), cos = Math.max(.5, (n1[0] * n2[0] + n1[1] * n2[1] + 1) / 2) ** .5;
+    nx /= l; ny /= l;
+    const h = q[2] / 2 / cos;
+    return [[q[0] + nx * h, q[1] + ny * h], [q[0] - nx * h, q[1] - ny * h]];
+  });
+  const f = p => `${p[0].toFixed(2)} ${p[1].toFixed(2)}`;
+  return "M" + off.map(o => f(o[0])).join(" L") + " L" + off.reverse().map(o => f(o[1])).join(" L") + "Z";
+};
+
+// Wing strokes share one direction (about 30° up-left); the three feathers are parallel ledger rules,
+// 4.2 units apart, each starting further back along the trailing edge.
+const MARK = [
+  [[36.6, 30.2, 2.8], [45, 24.2, 3], [54.2, 27.6, 2.4], [51.4, 33, .2]],           // nape, crown, hooked beak
+  [[49.4, 32, 1.2], [42, 33, 2.4], [37.4, 37.2, 2.2]],                              // jaw and throat
+  [[33.5, 26.4, 3.4], [2, 8.2, .2]],                                                // near wing, leading edge
+  [[26.2, 27.1, 2.6], [3.6, 14.1, .2]],                                             // ledger rule 1
+  [[21.5, 29.2, 2.4], [4.1, 19.2, .2]],                                             // ledger rule 2
+  [[16.8, 31.4, 2.2], [4.6, 24.4, .2]],                                             // ledger rule 3
+  [[29.6, 21.4, 2.6], [21.4, 3.6, .2]],                                             // far wing, rising behind the back
+  [[25.8, 19.4, 2], [15.8, 6.6, .2]],
+  [[36.4, 40, 2.6], [28.6, 43.6, 2.2], [19.6, 44.6, 1.6]],                          // belly
+  [[19.4, 45, 2.4], [4.6, 47.2, .2]],                                               // tail
+  [[20.8, 47.8, 2.2], [8, 54, .2]],
+];
+const SMALL = [
+  [[11.4, 12.6, 2], [16.8, 9.2, 2.1], [21.6, 10.6, 1.8], [20.2, 13.8, .4]],
+  [[13, 11.2, 2.6], [.8, 3.6, .5]],
+  [[12.4, 14.6, 2.2], [3, 10.4, .5]],
+  [[14.2, 16, 2.2], [8.6, 18, 1.8], [3.4, 18.2, .5]],
+];
+document.getElementById("pM").setAttribute("d", MARK.map(taper).join(""));
+document.getElementById("pS").setAttribute("d", SMALL.map(taper).join(""));
+</script>
+</body></html>

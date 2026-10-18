@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <title>LedgerHawk</title>
+  <!-- Small-size glyph (favicon, 16–24px): the same gesture in fewer, heavier strokes. -->
+  <style>.ink{fill:#18181B}@media (prefers-color-scheme:dark){.ink{fill:#EDEDEC}}</style>
+  <path class="ink" d="M11.93 13.45 L16.96 10.34 L20.45 11.14 L20.02 13.72 L20.38 13.88 L22.75 10.06 L16.64 8.06 L10.87 11.75ZM13.69 10.10 L0.93 3.39 L0.67 3.81 L12.31 12.30ZM12.85 13.60 L3.10 10.17 L2.90 10.63 L11.95 15.60ZM13.83 14.96 L8.43 17.11 L3.39 17.95 L3.41 18.45 L8.77 18.89 L14.57 17.04Z"/>
+</svg>

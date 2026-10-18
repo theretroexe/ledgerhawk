@@ -1,0 +1,40 @@
+"""python test_app.py: each demo invoice round-trips through the PDF and lands on the expected decision."""
+import asyncio
+
+import app
+
+EXPECTED = {"northwind-clean": "approve", "helix-price": "hold", "apex-duplicate": "reject",
+            "orbit-bank": "escalate", "brightline-nopo": "hold"}
+
+for sid, want in EXPECTED.items():
+    inv = asyncio.run(app.extract_sim("x.pdf", app.sample_pdf(app.SAMPLES[sid]["invoice"]), ""))
+    assert inv["vendor"] == app.SAMPLES[sid]["invoice"]["vendor"], inv
+    got = app.rule_decision(app.run_checks(inv))
+    assert got == want, (sid, got, app.run_checks(inv))
+
+# The model can be stricter than the rules, never looser.
+flags = [app.flag("price_variance", 100)]
+assert app.guard({"decision": "approve"}, flags)[0] == "hold"
+assert app.guard({"decision": "escalate"}, flags)[0] == "escalate"
+assert app.guard({"decision": "yes"}, [])[0] == "approve"
+# Line flags point at the exact invoice line; field flags at the exact field.
+helix = asyncio.run(app.extract_sim("x.pdf", app.sample_pdf(app.SAMPLES["helix-price"]["invoice"]), ""))
+assert [(f["field"], f["line"]) for f in app.run_checks(helix)] == [("line", 0)]
+orbit = asyncio.run(app.extract_sim("x.pdf", app.sample_pdf(app.SAMPLES["orbit-bank"]["invoice"]), ""))
+assert app.run_checks(orbit)[0]["field"] == "iban"
+
+# Releasing a suspected bank-fraud invoice needs a reviewer, a reason and a confirmed call-back.
+esc = app.entry("T-1", "Apex Logistics", "", "2026-10-01", 10.0, "escalated",
+                [app.flag("bank_change", 10.0)], "", app.now(), 1, "agent")
+app.LEDGER.append(esc)
+for body in ({"action": "approve", "reviewer": "x"}, {"action": "approve", "reason": "ok", "verified": True}):
+    try:
+        asyncio.run(app.review(esc["id"], body))
+        raise AssertionError(f"release should be refused: {body}")
+    except app.HTTPException as err:
+        assert err.status_code == 400
+out = asyncio.run(app.review(esc["id"], {"action": "approve", "reviewer": "x", "reason": "called", "verified": True}))
+assert out["status"] == "approved" and out["agent_status"] == "escalated" and out["reviewed_by"] == "x"
+rec = app.records()
+assert len(rec["vendors"]) == len(app.VENDORS) and rec["purchase_orders"][0]["ordered"] == 3900.0
+print("ok")

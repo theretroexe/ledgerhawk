@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LedgerHawk Pitch Deck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Same neutral palette and type as the LedgerHawk UI (index.html): colour only carries meaning (blue approve, ochre hold, red stop). */
+:root {
+  --desk: #F4F4F2; --panel: #FFFFFF; --paper: #FBFBF9;
+  --ink: #18181B; --ink-2: #52525B; --ink-3: #6B6B74; --rule: rgb(24 24 27 / .08); --rule-2: rgb(24 24 27 / .16);
+  --blue: #1F3A93; --red: #C4203A; --ochre: #9A5B00;
+  --blue-soft: rgb(31 58 147 / .09); --red-soft: rgb(196 32 58 / .09); --ochre-soft: rgb(154 91 0 / .1);
+  --sans: "IBM Plex Sans", system-ui, sans-serif; --cond: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --s: 1;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--desk); color: var(--ink); font: 400 20px/1.45 var(--sans); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+.mono { font-family: var(--mono); }
+.deck { display: grid; justify-content: center; gap: 24px; padding: 24px 16px; }
+.slide { width: 1280px; height: 720px; zoom: var(--s); position: relative; overflow: hidden; background: var(--paper);
+  box-shadow: 0 0 0 1px rgb(24 24 27 / .08), 0 1px 2px rgb(24 24 27 / .04), 0 20px 44px -22px rgb(24 24 27 / .22);
+  padding: 60px 72px 56px; display: flex; flex-direction: column; }
+.slide::after { content: attr(data-n) " / 9"; position: absolute; right: 40px; bottom: 24px; font: 400 13px var(--mono); color: var(--ink-3); }
+.brandmark { position: absolute; left: 72px; bottom: 22px; font: 700 15px var(--cond); color: var(--ink-2); display: flex; gap: 8px; align-items: center; }
+.kicker { font: 600 15px var(--cond); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 10px; }
+h1 { font: 700 46px/1.08 var(--cond); letter-spacing: -.01em; margin: 0 0 28px; max-width: 1100px; }
+h3 { font: 600 23px/1.2 var(--cond); margin: 0 0 8px; }
+p { margin: 0; }
+.muted { color: var(--ink-2); }
+.small { font-size: 16px; }
+.grid { display: grid; gap: 20px; }
+.c2 { grid-template-columns: 1fr 1fr; } .c3 { grid-template-columns: repeat(3, 1fr); } .c4 { grid-template-columns: repeat(4, 1fr); }
+.card { background: var(--panel); border: 1px solid var(--rule-2); border-radius: 8px; padding: 24px; }
+.card .big { font: 700 44px/1.05 var(--cond); letter-spacing: -.01em; margin-bottom: 8px; }
+.tag { display: inline-block; font: 600 12.5px var(--cond); letter-spacing: .06em; text-transform: uppercase; padding: 3px 9px; border: 1.5px solid currentColor; border-radius: 3px; color: var(--ink-2); }
+.t-blue { color: var(--blue); } .t-red { color: var(--red); } .t-ochre { color: var(--ochre); }
+.foot { margin-top: auto; font-size: 14px; color: var(--ink-3); padding-bottom: 8px; }
+ul.clean { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+ul.clean li { padding-left: 26px; position: relative; }
+ul.clean li::before { content: "–"; position: absolute; left: 0; top: 0; color: var(--ink-3); }
+table { width: 100%; border-collapse: collapse; font-size: 17px; }
+td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+th { font: 500 13px var(--sans); color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; }
+img.shot { display: block; width: 100%; border-radius: 4px; box-shadow: 0 0 0 1px var(--rule-2), 0 18px 36px -18px rgb(28 33 39 / .35); }
+.cap { font-size: 14px; color: var(--ink-3); margin-top: 8px; }
+
+/* title */
+.title { justify-content: center; }
+.title h1 { font-size: 92px; margin-bottom: 18px; }
+.title .wordmark { display: flex; align-items: center; gap: 18px; margin-left: -10px; }
+.title .wordmark svg { color: var(--ink); flex: none; }
+.title .lede { font-size: 28px; max-width: 760px; }
+.title .meta { margin-top: 40px; display: flex; gap: 12px; flex-wrap: wrap; max-width: 660px; }
+.title .meta .tag { font-size: 15px; padding: 6px 12px; }
+.title .stamp-hero { position: absolute; right: 56px; top: 110px; width: 360px; transform: rotate(4deg); }
+.title .stamp-hero2 { position: absolute; right: 90px; top: 400px; width: 340px; transform: rotate(-3deg); }
+
+/* flow */
+.flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+.flow .card { padding: 18px; position: relative; }
+.flow .card:not(:last-child)::after { content: "→"; position: absolute; right: -7px; top: 18px; color: var(--ink-3); font-size: 18px; transform: translateX(50%); }
+.flow .n { font: 600 14px var(--mono); color: var(--ink-3); margin-bottom: 8px; }
+.flow h3 { font-size: 20px; }
+.flow p { font-size: 15px; color: var(--ink-2); margin-top: 6px; }
+.flow .tag { margin-top: 12px; font-size: 11px; }
+.stamps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-top: 24px; align-items: center; }
+.stamps img { width: 100%; display: block; }
+
+/* architecture */
+.arch { display: grid; grid-template-columns: 260px 1fr 270px; gap: 22px; align-items: start; }
+.zone { border: 1.5px dashed var(--rule-2); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.zone > .zt { font: 600 13px var(--cond); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+.zone.evolus, .zone.amd { border-style: solid; border-color: var(--ink-2); } .zone.evolus > .zt, .zone.amd > .zt { color: var(--ink); }
+.blk { background: var(--panel); border: 1px solid var(--rule); border-radius: 5px; padding: 10px 13px; font-size: 15px; line-height: 1.35; }
+.blk b { display: block; font: 600 17px var(--cond); }
+.blk .mono { font-size: 12px; color: var(--ink-3); margin-top: 3px; }
+.evo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.link { font-size: 13px; color: var(--ink-3); text-align: center; }
+
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 5px; padding: 12px 14px; margin: 0;
+  font: 14px/1.55 var(--mono); color: var(--ink); white-space: pre; }
+pre.code .k { color: var(--ink); font-weight: 500; } pre.code .s { color: var(--ink-2); } pre.code .c { color: var(--ink-3); }
+pre.code .hi { color: var(--red); } pre.code .ok { color: var(--blue); }
+
+@media print {
+  @page { size: 1280px 720px; margin: 0; }
+  html, body { background: var(--paper); }
+  .deck { display: block; padding: 0; }
+  .slide { zoom: 1; box-shadow: none; break-after: page; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <!-- LedgerHawk logo, from invoice-agent/brand/ (ledgerhawk-icon.svg for small sizes, ledgerhawk-mark.svg otherwise). -->
+  <symbol id="icon" viewBox="0 0 24 24"><path fill="currentColor" d="M11.93 13.45 L16.96 10.34 L20.45 11.14 L20.02 13.72 L20.38 13.88 L22.75 10.06 L16.64 8.06 L10.87 11.75ZM13.69 10.10 L0.93 3.39 L0.67 3.81 L12.31 12.30ZM12.85 13.60 L3.10 10.17 L2.90 10.63 L11.95 15.60ZM13.83 14.96 L8.43 17.11 L3.39 17.95 L3.41 18.45 L8.77 18.89 L14.57 17.04Z"/></symbol>
+  <symbol id="mark" viewBox="0 0 64 64"><path fill="currentColor" d="M37.41 31.34 L45.23 25.88 L52.62 28.21 L51.31 32.95 L51.49 33.05 L55.78 26.99 L44.77 22.52 L35.79 29.06ZM49.32 31.41 L41.47 31.86 L36.66 36.39 L38.14 38.01 L42.53 34.14 L49.48 32.59ZM34.35 24.93 L2.05 8.11 L1.95 8.29 L32.65 27.87ZM26.85 25.97 L3.65 14.01 L3.55 14.19 L25.55 28.23ZM22.10 28.16 L4.15 19.11 L4.05 19.29 L20.90 30.24ZM17.35 30.45 L4.65 24.31 L4.55 24.49 L16.25 32.35ZM30.78 20.86 L21.49 3.56 L21.31 3.64 L28.42 21.94ZM26.59 18.78 L15.88 6.54 L15.72 6.66 L25.01 20.02ZM35.86 38.82 L28.30 42.53 L19.51 43.80 L19.69 45.40 L28.90 44.67 L36.94 41.18ZM19.22 43.81 L4.59 47.10 L4.61 47.30 L19.58 46.19ZM20.32 46.81 L7.96 53.91 L8.04 54.09 L21.28 48.79Z"/><circle cx="46.4" cy="27.5" r="1.1" fill="#C4203A"/></symbol>
+</svg>
+<div class="deck">
+
+<!-- 1 -->
+<section class="slide title" data-n="1">
+  <p class="kicker">Evolus Business Agents on AMD · AMD Developer Hackathon ACT III</p>
+  <h1 class="wordmark"><svg width="112" height="112" aria-hidden="true"><use href="#mark"/></svg>LedgerHawk</h1>
+  <p class="lede">An accounts-payable agent that reads every supplier invoice, checks it against the PO and vendor master, and stamps it before any money moves.</p>
+  <div class="meta">
+    <span class="tag">Evolus extractor · agent · knowledge library · AI Tool · workflows</span>
+    <span class="tag">Qwen2.5-7B-Instruct on AMD Instinct MI300X · vLLM</span>
+  </div>
+  <img class="stamp-hero" src="stamp-orbit-bank.png" alt="">
+  <img class="stamp-hero2" src="stamp-northwind-clean.png" alt="">
+</section>
+
+<!-- 2 -->
+<section class="slide" data-n="2">
+  <p class="kicker">The problem</p>
+  <h1>AP teams key invoices by hand, and the expensive mistakes still get paid.</h1>
+  <div class="grid c3">
+    <div class="card">
+      <span class="tag">Manual keying</span>
+      <div class="big" style="margin-top:16px">10–15 min</div>
+      <p class="muted">per invoice to read it, type it into the ERP, match it to the PO and chase the vendor. Most of that time goes on clean invoices that need no judgement.</p>
+    </div>
+    <div class="card">
+      <span class="tag t-red">Duplicate payments</span>
+      <div class="big" style="margin-top:16px">"Second notice"</div>
+      <p class="muted">A reminder for an invoice that was already paid looks like a new invoice. Pay it again and the money is gone until someone notices.</p>
+    </div>
+    <div class="card">
+      <span class="tag t-red">Bank-detail fraud</span>
+      <div class="big" style="margin-top:16px">"Our IBAN changed"</div>
+      <p class="muted">Business email compromise: a real-looking invoice with new bank details. One of the costliest frauds companies face, and it lands in the AP inbox.</p>
+    </div>
+  </div>
+  <p class="foot">The 10–15 minute figure is a working assumption for manual handling; the value slide uses 12 minutes.</p>
+  <div class="brandmark"><svg width="20" height="20" aria-hidden="true"><use href="#icon"/></svg>LedgerHawk</div>
+</section>
+
+<!-- 3 -->
+<section class="slide" data-n="3">
+  <p class="kicker">Who it is for</p>
+  <h1>Two people own every supplier payment. LedgerHawk does the routine part for both.</h1>
+  <div class="grid c2">
+    <div class="card">
+      <h3>AP clerk</h3>
+      <p class="muted small" style="margin-bottom:16px">Works the inbox, keys invoices, chases vendors.</p>
+      <ul class="clean">
+        <li>Clean invoices are approved for payment without a touch; the clerk only sees exceptions.</li>
+        <li>Price or quantity variances arrive with the vendor email already drafted.</li>
+        <li>The evidence is written in the margin next to the exact field that failed.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Financial controller</h3>
+      <p class="muted small" style="margin-bottom:16px">Owns payment risk, signs off on exceptions, answers the auditors.</p>
+      <ul class="clean">
+        <li>Duplicates and bank-detail changes are stopped before payment, not found after.</li>
+        <li>Releasing a stopped invoice takes a name, a reason and a call-back attestation.</li>
+        <li>An audit log with CSV export records every decision and every override.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="brandmark"><svg width="20" height="20" aria-hidden="true"><use href="#icon"/></svg>LedgerHawk</div>
+</section>
+
+<!-- 4 -->
+<section class="slide" data-n="4">
+  <p class="kicker">The solution</p>
+  <h1>One email in, one stamped decision out, with the evidence in the margin.</h1>
+  <div class="flow">
+    <div class="card"><div class="n">01</div><h3>Read the invoice</h3><p>The PDF from the AP inbox becomes fields and lines: vendor, PO, IBAN, totals.</p><span class="tag">Evolus document extractor</span></div>
+    <div class="card"><div class="n">02</div><h3>Check against PO and vendor master</h3><p>Eight controls: vendor, IBAN, duplicate, valid PO, items, 2% price tolerance, quantities, total.</p><span class="tag">Deterministic rules</span></div>
+    <div class="card"><div class="n">03</div><h3>Decide</h3><p>The agent applies the AP policy and writes the rationale for the audit log.</p><span class="tag">Evolus agent · AMD model</span></div>
+    <div class="card"><div class="n">04</div><h3>Write to the vendor</h3><p>For fixable variances, a polite email asking for a corrected invoice.</p><span class="tag">Evolus AI Tool: email</span></div>
+    <div class="card"><div class="n">05</div><h3>Hand off</h3><p>Post to the ERP, or start the human-review workflow.</p><span class="tag">Evolus workflows</span></div>
+  </div>
+  <p class="small muted" style="margin:20px 0 8px">Every run leaves one JSON record (Intake → JSON, with Copy and Download). Excerpt for OC-3302:</p>
+  <div class="grid c3" style="gap:12px">
+    <pre class="code"><span class="c">"extracted": {  // Evolus extractor</span>
+  "vendor": "Orbit Cloud Services",
+  "po": "PO-1045",
+  <span class="hi">"iban": "GB33BUKB20201555555555"</span>,
+  "total": 1410 }</pre>
+    <pre class="code"><span class="c">"controls": {  // PO + vendor master</span>
+  "passed": 7, "of": 8,
+  "failed": [{ <span class="hi">"code": "bank_change"</span> }],
+  "vendor_master": {
+    <span class="ok">"iban": "NL91ABNA0417164300"</span> } }</pre>
+    <pre class="code"><span class="c">"decision": {  // Qwen on MI300X</span>
+  <span class="hi">"decision": "escalate"</span>,
+  "confidence": 0.88, "guard": null },
+<span class="c">"workflow": {  // Evolus workflow</span>
+  "workflow": "human-review" }</pre>
+  </div>
+  <div class="brandmark"><svg width="20" height="20" aria-hidden="true"><use href="#icon"/></svg>LedgerHawk</div>
+</section>
+
+<!-- 5 -->
+<section class="slide" data-n="5">
+  <p class="kicker">Architecture</p>
+  <h1 style="font-size:40px;margin-bottom:22px">Evolus building blocks do the work; an open model on AMD makes the call.</h1>
+  <div class="arch">
+    <div class="zone">
+      <div class="zt">LedgerHawk app · FastAPI</div>
+      <div class="blk"><b>AP inbox</b>Email + PDF, or drag-and-drop</div>
+      <div class="blk"><b>Controls</b>PO match, duplicate and IBAN checks in code</div>
+      <div class="blk"><b>Guardrail</b>The model can't loosen the rules</div>
+      <div class="blk"><b>Audit + Records</b>Loss prevented, review queue, log; vendor master and POs</div>
+    </div>
+    <div class="zone evolus">
+      <div class="zt">Evolus workspace</div>
+      <div class="evo-grid">
+        <div class="blk"><b>Document extractor</b>PDF → JSON schema<div class="mono">…/json/{extractor}/ask-file</div></div>
+        <div class="blk"><b>AP agent</b>Decides and explains, JSON reply<div class="mono">OpenAI-compatible /v1/chat/completions</div></div>
+        <div class="blk"><b>Knowledge library</b>ap_policy.md grounds every decision<div class="mono">attached to the AP agent</div></div>
+        <div class="blk"><b>AI Tool: email</b>Writes the vendor query<div class="mono">/api/v1/ai-tools/email/run</div></div>
+      </div>
+      <div class="blk"><b>Workflows</b>post-to-erp (approved) · human-review (held, stopped, duplicate)<div class="mono">/api/v1/workflows/{id}/execute</div></div>
+    </div>
+    <div class="zone amd">
+      <div class="zt">AMD Developer Cloud</div>
+      <div class="blk"><b>AMD Instinct MI300X</b>GPU droplet</div>
+      <div class="blk"><b>vLLM</b>OpenAI-compatible server with tool calling</div>
+      <div class="blk"><b>Qwen2.5-7B-Instruct</b>Open weights on infrastructure we control</div>
+      <div class="link">Added to Evolus as an<br>OpenAI-compatible model endpoint</div>
+    </div>
+  </div>
+  <p class="foot">Every Evolus call is implemented and goes live once its credentials are set; until then it is simulated, and the app labels each step live, simulated or fallback.</p>
+  <div class="brandmark"><svg width="20" height="20" aria-hidden="true"><use href="#icon"/></svg>LedgerHawk</div>
+</section>
+
+<!-- 6 -->
+<section class="slide" data-n="6">
+  <p class="kicker">Live demo</p>
+  <h1 style="font-size:38px;margin-bottom:14px">Five emails in the AP inbox, five different stamps.</h1>
+  <img class="shot" src="crop-header.png" alt="LedgerHawk app header: hawk logo, the pitch line, the Intake, Audit and Records tabs, and the Qwen2.5-7B-Instruct on AMD Instinct MI300X model chip" style="margin-bottom:14px">
+  <div style="display:grid;grid-template-columns:1fr 520px;gap:28px;align-items:start">
+    <table style="font-size:16px">
+      <tr><th>Email</th><th style="width:160px">Stamp</th></tr>
+      <tr><td>Northwind NW-2291<div class="muted small">clean match</div></td><td><img src="stamp-northwind-clean.png" alt="Approved for payment" style="width:136px;display:block"></td></tr>
+      <tr><td>Orbit OC-3302<div class="muted small">"new bank details"</div></td><td><img src="stamp-orbit-bank.png" alt="Stop: verify bank details" style="width:136px;display:block"></td></tr>
+      <tr><td>Apex AP-5510<div class="muted small">"reminder", paid 17 days ago</div></td><td><img src="stamp-apex-duplicate.png" alt="Duplicate: do not pay" style="width:136px;display:block"></td></tr>
+      <tr><td>Helix HX-7781<div class="muted small">price +10.1% over PO</div></td><td><img src="stamp-helix-price.png" alt="Hold: query vendor" style="width:136px;display:block"></td></tr>
+      <tr><td>Brightline BL-0917<div class="muted small">no purchase order</div></td><td><img src="stamp-brightline-nopo.png" alt="Hold: PO required" style="width:136px;display:block"></td></tr>
+    </table>
+    <figure style="margin:0">
+      <img class="shot" src="crop-fraud.png" alt="Invoice OC-3302 rendered as paper, with the IBAN characters that differ from the vendor master marked in red and a Stop: verify bank details stamp">
+      <figcaption class="cap">OC-3302 as read by the Evolus document extractor: the IBAN diff against the vendor master is inked in the margin.</figcaption>
+    </figure>
+  </div>
+  <div class="brandmark"><svg width="20" height="20" aria-hidden="true"><use href="#icon"/></svg>LedgerHawk</div>
+</section>
+
+<!-- 7 -->
+<section class="slide" data-n="7">
+  <p class="kicker">Measurable value</p>
+  <h1 style="margin-bottom:22px">Most invoices never reach a person, and the risky ones never reach the bank.</h1>
+  <img class="shot" src="crop-audit.png" alt="Audit view: €39,424 loss prevented in the last 30 days, €2,550 of it caught in this session; €750 held for correction, 70% touchless, 9.8 hours saved, 4 open reviews" style="width:820px">
+  <div class="grid c3" style="margin-top:18px;gap:16px">
+    <div class="card" style="padding:14px 18px"><b class="t-red">€2,550 caught in the demo</b><p class="muted small">€1,410 suspected fraud + €1,140 duplicate. The €750 overcharge is held for correction, not counted as loss.</p></div>
+    <div class="card" style="padding:14px 18px"><b class="t-blue">70% touchless · 9.8 h saved</b><p class="muted small">49 of 70 invoices approved untouched × 12 min of manual handling.</p></div>
+    <div class="card" style="padding:14px 18px"><b>At scale (illustrative)</b><p class="muted small">2,000 invoices/month × 70% × 12 min ≈ 280 hours a month, about 1.75 AP clerks.</p></div>
+  </div>
+  <p class="foot" style="padding-bottom:0">Assumptions: 30-day synthetic demo ledger plus the 5 demo emails, not customer data. Loss prevented counts only duplicates and suspected fraud. 12 min is the midpoint of the 10–15 min manual estimate.</p>
+  <div class="brandmark"><svg width="20" height="20" aria-hidden="true"><use href="#icon"/></svg>LedgerHawk</div>
+</section>
+
+<!-- 8 -->
+<section class="slide" data-n="8">
+  <p class="kicker">Guardrail</p>
+  <h1 style="margin-bottom:22px">The model can be stricter than the rules, never looser.</h1>
+  <div style="display:grid;grid-template-columns:560px 1fr;gap:32px;align-items:start">
+    <figure style="margin:0">
+      <img class="shot" src="crop-released.png" alt="The Stop: verify bank details stamp struck through and re-stamped Released for payment by reviewer Giulia Conti">
+      <figcaption class="cap">A stopped invoice released by a named reviewer: the old stamp is struck through, never erased.</figcaption>
+    </figure>
+    <div>
+      <ul class="clean" style="font-size:18px;gap:10px">
+        <li><b>Rules set the floor.</b> Eight controls run in code, so an auditor can replay them.</li>
+        <li><b>The model adds judgement.</b> It may stop a clean-looking invoice; it cannot approve a flagged one.</li>
+        <li><b>Releasing a Stop is a control.</b> Reviewer name, reason and a call-back on the number in the vendor master.</li>
+        <li><b>No silent failures.</b> A failed live call falls back visibly, with the error shown.</li>
+      </ul>
+      <pre class="code" style="margin-top:16px"><span class="k">if</span> d == <span class="s">"approve"</span> <span class="k">and</span> flags:
+    <span class="k">return</span> rules, <span class="s">"guardrail: model approved an</span>
+<span class="s">      invoice with failed checks; overridden"</span></pre>
+    </div>
+  </div>
+  <div class="brandmark"><svg width="20" height="20" aria-hidden="true"><use href="#icon"/></svg>LedgerHawk</div>
+</section>
+
+<!-- 9 -->
+<section class="slide" data-n="9">
+  <p class="kicker">Next steps</p>
+  <h1>From hackathon demo to the AP team's inbox.</h1>
+  <div class="grid c3">
+    <div class="card">
+      <span class="tag">Now</span>
+      <h3 style="margin-top:14px">Go live end to end</h3>
+      <p class="muted">Connect the Evolus workspace and the vLLM endpoint on MI300X, then measure latency, throughput and extraction accuracy on real invoices.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Next</span>
+      <h3 style="margin-top:14px">Plug into the ERP</h3>
+      <p class="muted">Read the vendor master and open POs through an Evolus workflow, add goods receipts to move from a two-way to a three-way match, and persist the ledger.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Then</span>
+      <h3 style="margin-top:14px">Learn from reviewers</h3>
+      <p class="muted">Turn repeated reviewer releases into policy updates in the knowledge library; add multi-currency and partial deliveries.</p>
+    </div>
+  </div>
+  <p class="foot" style="font-size:18px;color:var(--ink)">LedgerHawk · Evolus × AMD · <span class="muted">try it: <span class="mono">pip install -r requirements.txt &amp;&amp; python app.py</span></span></p>
+  <div class="brandmark"><svg width="20" height="20" aria-hidden="true"><use href="#icon"/></svg>LedgerHawk</div>
+</section>
+
+</div>
+<script>
+const fit = () => document.documentElement.style.setProperty("--s", Math.min(1, (innerWidth - 32) / 1282));
+fit(); addEventListener("resize", fit);
+// Arrow keys / Space / PageUp / PageDown jump slide to slide.
+const slides = [...document.querySelectorAll(".slide")];
+addEventListener("keydown", e => {
+  const dir = { ArrowRight: 1, ArrowDown: 1, PageDown: 1, " ": 1, ArrowLeft: -1, ArrowUp: -1, PageUp: -1 }[e.key];
+  if (!dir) return;
+  e.preventDefault();
+  const cur = slides.findIndex(s => s.getBoundingClientRect().top > -40);
+  slides[Math.max(0, Math.min(slides.length - 1, (cur < 0 ? slides.length - 1 : cur) + dir))].scrollIntoView({ behavior: "smooth" });
+});
+</script>
+</body>
+</html>
